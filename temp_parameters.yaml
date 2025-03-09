@@ -1,0 +1,9 @@
+input_file: C:\Users\maitr\OneDrive\Documents\Work\2025\JHU\Hui's_innovation\Miscleavage_project\PDX7_2\20250201_191628_20250121_Report_PDX7.tsv
+output_dir: C:\Users\maitr\OneDrive\Documents\Work\2025\JHU\Hui's_innovation\Miscleavage_project\PDX7_2\mc_parser
+fasta_path: C:\Users\maitr\OneDrive\Documents\Work\2025\JHU\Hui's_innovation\Miscleavage_project\PDX7_2\20191213-SwissProt-Human-Mouse-Trypsin.fasta
+enzyme: trypsin/p
+missed_cleavage: 2
+min_length: 7
+max_length: 52
+m_cleavage: True
+workers: 5
