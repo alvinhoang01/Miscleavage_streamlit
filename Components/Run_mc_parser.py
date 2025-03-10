@@ -167,7 +167,7 @@ def main():
             if os.path.exists(sqlite_path):
                 with open(sqlite_path, "rb") as file:
                     st.download_button(
-                        label="📥 Download SQLite (Prepare Task)",
+                        label="Download SQLite (Prepare Task)",
                         data=file,
                         file_name="peptides.sqlite",
                         mime="application/x-sqlite3"
@@ -176,8 +176,19 @@ def main():
 
         if st.button("▶ Run Split Task"):
             st.write("Running Split task...")
-            split_dia(param)
+            zip_path, temp_dir = split_dia(param)  # ✅ Get zip path
             st.success("✔ Split task completed!")
+
+            # ✅ Provide a download button for the ZIP file
+            if os.path.exists(zip_path):
+                with open(zip_path, "rb") as file:
+                    st.download_button(
+                        label="📥 Download Split Files (ZIP)",
+                        data=file,
+                        file_name="split_results.zip",
+                        mime="application/zip"
+                    )
+                st.success("📂 Split results are ready for download!")
 
     with col2:
         if st.button("▶ Run QC Task"):
