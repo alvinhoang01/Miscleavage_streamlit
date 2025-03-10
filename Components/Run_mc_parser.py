@@ -177,10 +177,10 @@ def main():
         if st.button("▶ Run Split Task"):
             st.write("Running Split task...")
             zip_path, temp_dir = split_dia(param)  # ✅ Get zip path
-            st.success("✔ Split task completed!")
+            if zip_path:
+                st.success("✔ Split task completed!")
 
-            # ✅ Provide a download button for the ZIP file
-            if os.path.exists(zip_path):
+                # ✅ Provide a download button for the ZIP file
                 with open(zip_path, "rb") as file:
                     st.download_button(
                         label="📥 Download Split Files (ZIP)",
