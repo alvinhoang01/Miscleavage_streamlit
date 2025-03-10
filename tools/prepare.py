@@ -88,8 +88,8 @@ def get_peptides(param):
                         # ✅ Ensure uniqueness using `pep_map`
                         if peptide in pep_map:
                             pep_map[peptide].add(protein_info)
-                        else:
-                            pep_map[peptide] = {protein_info}
+                    else:
+                        pep_map[peptide] = {protein_info}
 
     print(f"✅ Total unique peptides stored AFTER m_cleavege: {len(pep_map)}")
 
