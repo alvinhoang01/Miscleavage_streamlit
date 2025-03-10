@@ -2,8 +2,8 @@ import streamlit as st
 import yaml
 import os
 import io
-import requests
-import re
+import tempfile
+import shutil
 from tools.split_dia import split_dia
 from tools.prepare import get_peptides
 from tools.qc import qc_all
@@ -29,26 +29,17 @@ def compare_task(param):
     compare_all(param)
     merge_qc(param)
 
-import streamlit as st
-import yaml
-import os
-import io
-import requests
-import re
-from tools.split_dia import split_dia
-from tools.prepare import get_peptides
-from tools.qc import qc_all
-from tools.compare import compare_all, merge_qc
-
-# Initialize session state for tracking files
+# ✅ Initialize session state for tracking files
 if "uploaded_files" not in st.session_state:
     st.session_state.uploaded_files = []
+if "temp_dir" not in st.session_state:
+    st.session_state.temp_dir = tempfile.mkdtemp()
 
-# Function to read the YAML parameter file
+# ✅ Function to read the YAML parameter file
 def load_yaml(uploaded_file):
     return yaml.load(uploaded_file, Loader=yaml.FullLoader)
 
-# Function to allow users to download the actual default YAML file
+# ✅ Function to allow users to download the default YAML file
 def provide_yaml_download():
     default_yaml_path = "param/mc_parser.yml"
     with open(default_yaml_path, "r") as file:
@@ -61,98 +52,71 @@ def provide_yaml_download():
         mime="text/yaml",
     )
 
-# Function to convert Google Drive "view" links to direct download links
-def convert_drive_link(url):
-    match = re.search(r"https://drive\.google\.com/file/d/([^/]+)/view", url)
-    if match:
-        file_id = match.group(1)
-        return f"https://drive.google.com/uc?id={file_id}&export=download"
-    return url  # Return the same URL if not a Google Drive link
+# ✅ Function to manually handle large file uploads
+def save_uploaded_file(uploaded_file):
+    """Stream the file to disk instead of loading it into RAM."""
+    temp_dir = st.session_state.temp_dir  # Use the temporary directory
+    file_path = os.path.join(temp_dir, uploaded_file.name)
 
-# Function to download a large input file in chunks
-def download_large_file(url):
-    url = convert_drive_link(url)  # Convert if it's a Google Drive link
-    file_path = os.path.join(os.getcwd(), "downloaded_input_file.tsv")  # Fixed filename
+    with open(file_path, "wb") as f:
+        while chunk := uploaded_file.read(1024 * 1024):  # ✅ Process in 1MB chunks
+            f.write(chunk)
 
-    st.write(f"🔄 Downloading file from {url}...")
+    st.session_state.uploaded_files.append(file_path)  # Track file
+    return file_path
 
-    try:
-        with requests.get(url, stream=True) as response:
-            response.raise_for_status()
-            with open(file_path, "wb") as f:
-                for chunk in response.iter_content(chunk_size=8192):  # 8KB chunks
-                    if chunk:
-                        f.write(chunk)  # Write chunk to disk (NOT RAM)
-
-        st.session_state.uploaded_files.append(file_path)  # Track file
-        return file_path
-
-    except requests.exceptions.RequestException as e:
-        st.error(f"❌ Error downloading file: {e}")
-        return None
-
-# Function to save the FASTA file to disk and return the path
-def save_fasta_file(uploaded_fasta):
-    fasta_path = os.path.join(os.getcwd(), uploaded_fasta.name)  # Save in working directory
-
-    with open(fasta_path, "wb") as f:
-        f.write(uploaded_fasta.getbuffer())  # Save file correctly
-
-    st.session_state.uploaded_files.append(fasta_path)  # Track file
-    return fasta_path
-
-# Function to delete tracked files
+# ✅ Function to delete tracked files
 def cleanup_files():
-    for file_path in st.session_state.uploaded_files:
-        if os.path.exists(file_path):
-            os.remove(file_path)
-            st.write(f"🗑 Deleted: {file_path}")
-    st.session_state.uploaded_files = []  # Clear the list after cleanup
+    """Delete temporary files after processing."""
+    temp_dir = st.session_state.temp_dir
+    if os.path.exists(temp_dir):
+        shutil.rmtree(temp_dir)  # ✅ Delete temp folder
+        st.session_state.uploaded_files = []  # Clear session tracking
+        st.session_state.temp_dir = tempfile.mkdtemp()  # Create a new temp directory
+        st.write("🗑 Temporary files cleaned up!")
 
-# Streamlit UI
+# ✅ Streamlit UI
 def main():
     st.title("Run Tasks")
 
-    # Provide the actual YAML file for download
+    # ✅ Provide the default YAML file for download
     st.write("### Download Default YAML File")
     if os.path.exists("param/mc_parser.yml"):
         provide_yaml_download()
     else:
         st.error("⚠ Default YAML file not found!")
 
-    # User uploads YAML file
+    # ✅ User uploads YAML file
     uploaded_yaml = st.file_uploader("Upload YAML File", type=["yaml", "yml"])
     if not uploaded_yaml:
         st.warning("⚠ Please upload a YAML file to proceed.")
         return
 
-    # Load uploaded YAML file
+    # ✅ Load uploaded YAML file
     param = load_yaml(uploaded_yaml)
     st.success("✅ YAML file uploaded successfully!")
 
-    # Display YAML parameters
+    # ✅ Display YAML parameters
     st.write("### Parameters Preview:")
     st.json(param)
 
-    # **Input file must be uploaded via Google Drive / AWS S3**
-    file_url = st.text_input("Enter Input File URL (Google Drive / AWS S3)")
-
+    # ✅ User uploads large input file (processed in chunks)
+    uploaded_input_file = st.file_uploader("Upload Input File (Up to 5GB)", type=["tsv", "csv", "txt"])
     input_file_path = None
-    if file_url:
-        input_file_path = download_large_file(file_url)
-        if input_file_path:
-            param["input_file"] = input_file_path
-            st.success(f"✔ Input file downloaded")
+    if uploaded_input_file:
+        input_file_path = save_uploaded_file(uploaded_input_file)
+        param["input_file"] = input_file_path
+        st.success(f"✔ Input file uploaded and saved at: {input_file_path}")
 
-    # **User uploads FASTA file (saved to disk instead of storing as string)**
-    fasta_path = None
+    # ✅ User uploads FASTA file (also saved to disk)
     uploaded_fasta = st.file_uploader("Upload FASTA File", type=["fasta", "fa"])
+    fasta_path = None
     if uploaded_fasta:
-        fasta_path = save_fasta_file(uploaded_fasta)
-        param["fasta_path"] = fasta_path  # Save file path instead of string content
-        st.success(f"✅ FASTA file uploaded")
+        fasta_path = save_uploaded_file(uploaded_fasta)
+        param["fasta_path"] = fasta_path
+        st.success(f"✅ FASTA file uploaded and saved at: {fasta_path}")
 
-    # Task Execution Section
+    # ✅ Task Execution Section
     st.write("## Run Tasks")
 
     col1, col2 = st.columns(2)
@@ -163,7 +127,7 @@ def main():
             sqlite_path, temp_dir = get_peptides(param)  # ✅ Get SQLite file path
             st.success("✔ Prepare task completed!")
 
-        # ✅ Provide a download button for the Prepare task output
+            # ✅ Provide a download button for the Prepare task output
             if os.path.exists(sqlite_path):
                 with open(sqlite_path, "rb") as file:
                     st.download_button(
@@ -176,8 +140,10 @@ def main():
 
         if st.button("▶ Run Split Task"):
             st.write("Running Split task...")
-            zip_path, temp_dir = split_dia(param)  # ✅ Get zip path
-            if zip_path:
+            
+            zip_path, temp_dir = split_dia(param)  # ✅ Unpack the tuple properly
+
+            if zip_path and os.path.exists(zip_path):
                 st.success("✔ Split task completed!")
 
                 # ✅ Provide a download button for the ZIP file
@@ -185,10 +151,11 @@ def main():
                     st.download_button(
                         label="📥 Download Split Files (ZIP)",
                         data=file,
-                        file_name="split_results.zip",
+                        file_name="step1-split.zip",
                         mime="application/zip"
                     )
-                st.success("📂 Split results are ready for download!")
+                st.success("📂 Split results ready for download!")
+
 
     with col2:
         if st.button("▶ Run QC Task"):
@@ -202,7 +169,7 @@ def main():
             merge_qc(param)
             st.success("✔ Compare task completed!")
 
-    # Run Full Pipeline
+    # ✅ Run Full Pipeline
     st.write("## 🔄 Run Full Pipeline")
     if st.button("🔄 Run All Tasks Sequentially"):
         st.write("🛠 Running Prepare task...")
@@ -231,4 +198,3 @@ if st.sidebar.button("🗑 Clear Session & Delete Files"):
 
 if __name__ == "__main__":
     main()
-
