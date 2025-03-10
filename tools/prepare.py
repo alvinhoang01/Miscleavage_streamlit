@@ -3,11 +3,14 @@ from tqdm import tqdm
 import os
 import sqlite3
 import pandas as pd
+import tempfile
+import shutil
+import streamlit as st
 
 def get_peptides(param):
     """
     Function to digest a FASTA file into peptides and store the results in an SQLite database.
-    Optimized to handle large FASTA files efficiently without memory crashes.
+    Now optimized for cloud environments using a temporary folder.
     """
 
     fasta_path = param['fasta_path']
@@ -21,13 +24,10 @@ def get_peptides(param):
     if enzyme == "trypsin/p":
         enzyme = r'[KR](?!P)'
 
-    # ✅ Define output SQLite path
-    output_dir = param['output_dir']
-    sqlite_path = os.path.join(output_dir, "peptides.sqlite")
-
-    if not os.path.exists(output_dir):
-        os.makedirs(output_dir)
-    print(f"📂 Output directory created: {output_dir}")
+    # ✅ Create a temporary directory
+    temp_dir = tempfile.mkdtemp()
+    sqlite_path = os.path.join(temp_dir, "peptides.sqlite")
+    print(f"📂 Using temporary directory: {temp_dir}")
 
     # ✅ Connect to SQLite and create table
     conn = sqlite3.connect(sqlite_path)
@@ -109,10 +109,4 @@ def get_peptides(param):
     print(f"✅ Peptides written to `{sqlite_path}`.")
     print(f"📁 SQLite file size: {os.path.getsize(sqlite_path) / 1024:.2f} KB")
 
-    if os.path.exists(sqlite_path):
-        print(f"✅ SQLite database successfully saved at: {sqlite_path}")
-    else:
-        print(f"❌ ERROR: SQLite database was NOT saved at: {sqlite_path}")
-
-    return sqlite_path
-
+    return sqlite_path, temp_dir  # ✅ Return both SQLite file and temp directory

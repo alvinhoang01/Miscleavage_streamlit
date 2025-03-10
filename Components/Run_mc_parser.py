@@ -152,14 +152,6 @@ def main():
         param["fasta_path"] = fasta_path  # Save file path instead of string content
         st.success(f"✅ FASTA file uploaded")
 
-    # Output directory selection
-    output_dir = None
-    output_dir = st.text_input("Output Directory (Must be an Empty Folder)", value="")
-    param["output_dir"] = output_dir
-    if output_dir:
-        st.success(f"✅ Output directory uploaded")
-
-
     # Task Execution Section
     st.write("## Run Tasks")
 
@@ -168,8 +160,19 @@ def main():
     with col1:
         if st.button("▶ Run Prepare Task"):
             st.write("Running Prepare task...")
-            get_peptides(param)
+            sqlite_path, temp_dir = get_peptides(param)  # ✅ Get SQLite file path
             st.success("✔ Prepare task completed!")
+
+        # ✅ Provide a download button for the Prepare task output
+            if os.path.exists(sqlite_path):
+                with open(sqlite_path, "rb") as file:
+                    st.download_button(
+                        label="📥 Download SQLite (Prepare Task)",
+                        data=file,
+                        file_name="peptides.sqlite",
+                        mime="application/x-sqlite3"
+                    )
+                st.success("📂 SQLite database ready for download!")
 
         if st.button("▶ Run Split Task"):
             st.write("Running Split task...")
