@@ -9,8 +9,7 @@ import shutil
 def get_peptides(param):
     """
     Function to digest a FASTA file into peptides and store the results in an SQLite database.
-    Now includes temporary folder handling for cloud processing.
-    Uses batch writing to prevent memory overload.
+    Uses `pep_map` to maintain unique peptide-to-protein relationships while streaming data.
     """
 
     fasta_path = param['fasta_path']
@@ -37,6 +36,7 @@ def get_peptides(param):
 
     print("🔍 Reading FASTA file and processing proteins...")
 
+    pep_map = {}  # ✅ Bring back `pep_map` for unique peptide mapping
     batch_data = []  # ✅ Store small batches before inserting into SQLite
     batch_size = 5000  # ✅ Prevent memory overflow
 
@@ -53,22 +53,17 @@ def get_peptides(param):
             protein = header.split(" ")[0].split("|")[-1]
             for start, peptide in peptides:
                 if len(peptide) <= max_length:
-                    m = {
-                        'protein': protein,
-                        'start': start,
-                        'pre_aa': sequence[start-1] if start > 0 else "_",
-                        'post_aa': sequence[start+len(peptide)] if start+len(peptide) < len(sequence) else "_"
-                    }
+                    pre_aa = sequence[start - 1] if start > 0 else "_"
+                    post_aa = sequence[start + len(peptide)] if start + len(peptide) < len(sequence) else "_"
+                    protein_info = f"{protein}:{start}:{pre_aa}:{post_aa}"
 
-                    batch_data.append((peptide, f"{m['protein']}:{m['start']}:{m['pre_aa']}:{m['post_aa']}"))
+                    # ✅ Ensure uniqueness using `pep_map`
+                    if peptide in pep_map:
+                        pep_map[peptide].add(protein_info)
+                    else:
+                        pep_map[peptide] = {protein_info}
 
-                # ✅ Insert batch into SQLite to free memory
-                if len(batch_data) >= batch_size:
-                    cursor.executemany("INSERT INTO peptides VALUES (?, ?);", batch_data)
-                    conn.commit()
-                    batch_data = []  # ✅ Clear batch
-
-    print(f"✅ Peptides stored BEFORE m_cleavege: {len(batch_data)} (final batch size)")
+    print(f"✅ Total unique peptides stored BEFORE m_cleavege: {len(pep_map)}")
 
     # ✅ If `m_cleavege` flag is enabled, process again
     if m_cleavege:
@@ -86,22 +81,29 @@ def get_peptides(param):
 
                 for start, peptide in peptides:
                     if len(peptide) <= max_length:
-                        m = {
-                            'protein': protein,
-                            'start': start + 1,
-                            'pre_aa': sequence[start] if start > 0 else "_",
-                            'post_aa': sequence[start+1+len(peptide)] if start+1+len(peptide) < len(sequence) else "_"
-                        }
+                        pre_aa = sequence[start] if start > 0 else "_"
+                        post_aa = sequence[start + 1 + len(peptide)] if start + 1 + len(peptide) < len(sequence) else "_"
+                        protein_info = f"{protein}:{start+1}:{pre_aa}:{post_aa}"
 
-                        batch_data.append((peptide, f"{m['protein']}:{m['start']}:{m['pre_aa']}:{m['post_aa']}"))
+                        # ✅ Ensure uniqueness using `pep_map`
+                        if peptide in pep_map:
+                            pep_map[peptide].add(protein_info)
+                        else:
+                            pep_map[peptide] = {protein_info}
 
-                    # ✅ Insert batch into SQLite to free memory
-                    if len(batch_data) >= batch_size:
-                        cursor.executemany("INSERT INTO peptides VALUES (?, ?);", batch_data)
-                        conn.commit()
-                        batch_data = []  # ✅ Clear batch
+    print(f"✅ Total unique peptides stored AFTER m_cleavege: {len(pep_map)}")
 
-    print(f"✅ Peptides stored AFTER m_cleavege: {len(batch_data)} (final batch size)")
+    print("Writing peptides to SQLite...")
+
+    # ✅ Write Unique Peptides to SQLite in Batches
+    for peptide, protein_set in tqdm(pep_map.items(), desc="Inserting into SQLite"):
+        proteins_str = ";".join(sorted(protein_set))
+        batch_data.append((peptide, proteins_str))
+
+        if len(batch_data) >= batch_size:
+            cursor.executemany("INSERT INTO peptides VALUES (?, ?);", batch_data)
+            conn.commit()
+            batch_data = []  # ✅ Clear batch
 
     # ✅ Final batch insert (in case there are leftovers)
     if batch_data:
@@ -111,7 +113,7 @@ def get_peptides(param):
     conn.close()
 
     print(f"✅ Peptides written to `{sqlite_path}`.")
-    print(f"📊 Final database contains peptides.")
+    print(f"📊 Final database contains {len(pep_map)} peptides.")
     print(f"📁 SQLite file size: {os.path.getsize(sqlite_path) / 1024:.2f} KB")
 
     return sqlite_path, temp_dir  # ✅ Return SQLite path & temp dir
