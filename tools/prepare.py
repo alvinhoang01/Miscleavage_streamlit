@@ -2,11 +2,12 @@ from pyteomics import fasta, parser
 from tqdm import tqdm
 import os
 import sqlite3
+import pandas as pd
 
 def get_peptides(param):
     """
     Function to digest a FASTA file into peptides and store the results in an SQLite database.
-    Now optimized to prevent memory crashes by writing peptides directly to SQLite in chunks.
+    Optimized to handle large FASTA files efficiently without memory crashes.
     """
 
     fasta_path = param['fasta_path']
@@ -15,6 +16,10 @@ def get_peptides(param):
     min_length = int(param['min_length'])
     max_length = int(param['max_length'])
     m_cleavege = bool(param['m_cleavage'])
+
+    # ✅ Fix enzyme rule warning
+    if enzyme == "trypsin/p":
+        enzyme = r'[KR](?!P)'
 
     # ✅ Define output SQLite path
     output_dir = param['output_dir']
@@ -31,23 +36,28 @@ def get_peptides(param):
     cursor.execute("CREATE TABLE peptides (peptide TEXT, protein TEXT);")
     conn.commit()
 
-    # ✅ Process FASTA File
     print("🔍 Reading FASTA file and processing proteins...")
 
-    batch_data = []  # Store small batches of peptides before inserting into SQLite
-    batch_size = 5000  # ✅ Adjust this to control memory usage
+    batch_data = []  # ✅ Store small batches of peptides before inserting into SQLite
+    batch_size = 5000  # ✅ Control memory usage by writing in chunks
 
+    # ✅ Process FASTA file (main digestion step)
     with fasta.read(fasta_path) as entries:
         for header, sequence in tqdm(entries, desc="Processing Proteins"):
-            peptides = parser.xcleave(sequence, enzyme, missed_cleavages=missed_cleavages, min_length=min_length)
+            peptides = parser.xcleave(
+                sequence, enzyme,
+                missed_cleavages=missed_cleavages,
+                min_length=min_length,
+                regex=True
+            )
+
             protein = header.split(" ")[0].split("|")[-1]
-            
             for start, peptide in peptides:
                 if len(peptide) <= max_length:
                     pre_aa = sequence[start - 1] if start > 0 else "_"
                     post_aa = sequence[start + len(peptide)] if start + len(peptide) < len(sequence) else "_"
                     protein_info = f"{protein}:{start}:{pre_aa}:{post_aa}"
-                    
+
                     batch_data.append((peptide, protein_info))
 
                 # ✅ Insert batch into SQLite to free memory
@@ -56,13 +66,20 @@ def get_peptides(param):
                     conn.commit()
                     batch_data = []  # Clear batch
 
-    # ✅ Process `m_cleavege` if enabled
+    print(f"✅ Total unique peptides stored BEFORE m_cleavege: {len(batch_data)}")
+
+    # ✅ If `m_cleavege` flag is enabled, process again
     if m_cleavege:
         print("🔄 Running m_cleavage processing...")
 
         with fasta.read(fasta_path) as entries:
             for header, sequence in tqdm(entries, desc="Processing m_cleavege Proteins"):
-                peptides = parser.xcleave(sequence[1:], enzyme, missed_cleavages=missed_cleavages, min_length=min_length)
+                peptides = parser.xcleave(
+                    sequence[1:], enzyme,
+                    missed_cleavages=missed_cleavages,
+                    min_length=min_length,
+                    regex=True
+                )
                 protein = header.split(" ")[0].split("|")[-1]
 
                 for start, peptide in peptides:
@@ -78,6 +95,8 @@ def get_peptides(param):
                         cursor.executemany("INSERT INTO peptides VALUES (?, ?);", batch_data)
                         conn.commit()
                         batch_data = []  # Clear batch
+
+    print(f"✅ Total unique peptides stored AFTER m_cleavege: {len(batch_data)}")
 
     # ✅ Final batch insert (in case there are leftovers)
     if batch_data:
