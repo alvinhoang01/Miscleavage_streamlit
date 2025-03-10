@@ -89,7 +89,7 @@ def get_peptides(param):
                         m['post_aa'] = sequence[start+1+len(peptide)] if start+1+len(peptide) < len(sequence) else "_"
                         
                         if peptide in pep_map:
-                            pep_map[peptide].append(m)
+                            pep_map[peptide].add(m)
                     else:
                         pep_map[peptide] = [m]
     print(f"✅ Total unique peptides stored AFTER m_cleavege: {len(pep_map)}")
