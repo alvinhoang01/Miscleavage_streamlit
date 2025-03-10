@@ -4,6 +4,7 @@ import os
 import io
 import shutil
 import tempfile
+import pandas as pd
 from tools.split_dia import split_dia
 from tools.prepare import get_peptides
 from tools.qc import qc_all
@@ -49,6 +50,12 @@ def provide_yaml_download():
         mime="text/yaml",
     )
 
+# Cache function to load large files efficiently
+@st.cache_data
+def load_large_file(file_path):
+    """Load a sample of the large file to reduce memory usage."""
+    return pd.read_csv(file_path, nrows=1000)  # Limit rows to avoid memory crash
+
 # Streamlit UI
 def main():
     st.title("Run Tasks")
@@ -60,7 +67,7 @@ def main():
     else:
         st.error("⚠ Default YAML file not found!")
 
-    # User uploads their YAML file
+    # User uploads YAML file
     uploaded_yaml = st.file_uploader("Upload YAML File", type=["yaml", "yml"])
     if not uploaded_yaml:
         st.warning("⚠ Please upload a YAML file to proceed.")
@@ -87,6 +94,14 @@ def main():
 
         param["input_file"] = input_file_path
         st.success(f"✔ Input file saved to: {input_file_path}")
+
+        # Load only a small sample for preview (prevents full file loading in RAM)
+        try:
+            df_sample = load_large_file(input_file_path)
+            st.write("📊 Preview of Uploaded File (Limited to 1000 Rows):")
+            st.dataframe(df_sample)
+        except Exception as e:
+            st.error(f"Error loading sample: {e}")
 
     # FASTA file upload (streaming directly to disk)
     uploaded_fasta = st.file_uploader("Upload FASTA File (Up to 1GB)", type=["fasta", "fa"])
