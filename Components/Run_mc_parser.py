@@ -2,9 +2,8 @@ import streamlit as st
 import yaml
 import os
 import io
-import shutil
-import tempfile
-import pandas as pd
+import requests
+import re
 from tools.split_dia import split_dia
 from tools.prepare import get_peptides
 from tools.qc import qc_all
@@ -30,8 +29,20 @@ def compare_task(param):
     compare_all(param)
     merge_qc(param)
 
-# Default YAML file path (users can download and modify this)
-DEFAULT_YAML_PATH = "param/mc_parser.yml"
+import streamlit as st
+import yaml
+import os
+import io
+import requests
+import re
+from tools.split_dia import split_dia
+from tools.prepare import get_peptides
+from tools.qc import qc_all
+from tools.compare import compare_all, merge_qc
+
+# Initialize session state for tracking files
+if "uploaded_files" not in st.session_state:
+    st.session_state.uploaded_files = []
 
 # Function to read the YAML parameter file
 def load_yaml(uploaded_file):
@@ -50,15 +61,53 @@ def provide_yaml_download():
         mime="text/yaml",
     )
 
-# Function to stream file upload directly to disk (fixes memory crash)
-def save_uploaded_file(uploaded_file, temp_dir):
-    file_path = os.path.join(temp_dir, uploaded_file.name)
+# Function to convert Google Drive "view" links to direct download links
+def convert_drive_link(url):
+    match = re.search(r"https://drive\.google\.com/file/d/([^/]+)/view", url)
+    if match:
+        file_id = match.group(1)
+        return f"https://drive.google.com/uc?id={file_id}&export=download"
+    return url  # Return the same URL if not a Google Drive link
 
-    # Open file in write-binary mode and write in chunks
-    with open(file_path, "wb") as f:
-        shutil.copyfileobj(uploaded_file, f)  # Streams directly to disk (no RAM usage)
+# Function to download a large input file in chunks
+def download_large_file(url):
+    url = convert_drive_link(url)  # Convert if it's a Google Drive link
+    file_path = os.path.join(os.getcwd(), "downloaded_input_file.tsv")  # Fixed filename
 
-    return file_path
+    st.write(f"🔄 Downloading file from {url}...")
+
+    try:
+        with requests.get(url, stream=True) as response:
+            response.raise_for_status()
+            with open(file_path, "wb") as f:
+                for chunk in response.iter_content(chunk_size=8192):  # 8KB chunks
+                    if chunk:
+                        f.write(chunk)  # Write chunk to disk (NOT RAM)
+
+        st.session_state.uploaded_files.append(file_path)  # Track file
+        return file_path
+
+    except requests.exceptions.RequestException as e:
+        st.error(f"❌ Error downloading file: {e}")
+        return None
+
+# Function to save the FASTA file to disk and return the path
+def save_fasta_file(uploaded_fasta):
+    fasta_path = os.path.join(os.getcwd(), uploaded_fasta.name)  # Save in working directory
+
+    with open(fasta_path, "wb") as f:
+        f.write(uploaded_fasta.getbuffer())  # Save file correctly
+
+    st.session_state.uploaded_files.append(fasta_path)  # Track file
+    return fasta_path
+
+# Function to delete tracked files
+def cleanup_files():
+    for file_path in st.session_state.uploaded_files:
+        if os.path.exists(file_path):
+            os.remove(file_path)
+            st.write(f"🗑 Deleted: {file_path}")
+    st.session_state.uploaded_files = []  # Clear the list after cleanup
 
 # Streamlit UI
 def main():
@@ -85,22 +134,23 @@ def main():
     st.write("### Parameters Preview:")
     st.json(param)
 
-    # Create a temp directory to store files (ensures unique files for each user)
-    temp_dir = tempfile.mkdtemp()
+    # **Input file must be uploaded via Google Drive / AWS S3**
+    file_url = st.text_input("Enter Input File URL (Google Drive / AWS S3)")
 
-    # Input file upload (stream directly to disk, no buffering in RAM)
-    uploaded_input_file = st.file_uploader("Upload Input File (Up to 1GB)", type=["tsv", "csv", "txt"])
-    if uploaded_input_file:
-        input_file_path = save_uploaded_file(uploaded_input_file, temp_dir)
-        param["input_file"] = input_file_path
-        st.success(f"✔ Input file saved to: {input_file_path}")
+    input_file_path = None
+    if file_url:
+        input_file_path = download_large_file(file_url)
+        if input_file_path:
+            param["input_file"] = input_file_path
+            st.success(f"✔ Input file downloaded")
 
-    # FASTA file upload (stream directly to disk)
-    uploaded_fasta = st.file_uploader("Upload FASTA File (Up to 1GB)", type=["fasta", "fa"])
+    # **User uploads FASTA file (saved to disk instead of storing as string)**
+    fasta_path = None
+    uploaded_fasta = st.file_uploader("Upload FASTA File", type=["fasta", "fa"])
     if uploaded_fasta:
-        fasta_file_path = save_uploaded_file(uploaded_fasta, temp_dir)
-        param["fasta_path"] = fasta_file_path
-        st.success(f"✔ FASTA file saved to: {fasta_file_path}")
+        fasta_path = save_fasta_file(uploaded_fasta)
+        param["fasta_path"] = fasta_path  # Save file path instead of string content
+        st.success(f"✅ FASTA file uploaded")
 
     # Output directory selection
     output_dir = st.text_input("Output Directory (Must be an Empty Folder)", value="")
@@ -154,9 +204,13 @@ def main():
         merge_qc(param)
         st.success("✅ Full pipeline completed!")
 
-    # Cleanup temp directory (automatically deletes all temp files)
-    if os.path.exists(temp_dir):
-        shutil.rmtree(temp_dir)  # Deletes temp folder and all files inside it
+        # ✅ **Cleanup files after processing**
+        cleanup_files()
+
+# ✅ **Delete files when the session resets**
+if st.sidebar.button("🗑 Clear Session & Delete Files"):
+    cleanup_files()
 
 if __name__ == "__main__":
     main()
+
