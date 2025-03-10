@@ -2,7 +2,7 @@ import streamlit as st
 import yaml
 import os
 import io
-import pandas as pd
+import shutil
 import tempfile
 from tools.split_dia import split_dia
 from tools.prepare import get_peptides
@@ -66,7 +66,7 @@ def main():
         st.warning("⚠ Please upload a YAML file to proceed.")
         return
 
-    # Load uploaded YAML file (from memory)
+    # Load uploaded YAML file
     param = load_yaml(uploaded_yaml)
     st.success("✅ YAML file uploaded successfully!")
 
@@ -74,32 +74,30 @@ def main():
     st.write("### Parameters Preview:")
     st.json(param)
 
-    # Input file upload (store on disk, not in RAM)
+    # Create a temp directory to store files (ensures unique files for each user)
+    temp_dir = tempfile.mkdtemp()
+
+    # Input file upload (streaming directly to disk, no RAM usage)
     uploaded_input_file = st.file_uploader("Upload Input File (Up to 1GB)", type=["tsv", "csv", "txt"])
     if uploaded_input_file:
-        temp_dir = tempfile.gettempdir()  # Get system temp directory
-        temp_input_path = os.path.join(temp_dir, uploaded_input_file.name)
+        input_file_path = os.path.join(temp_dir, uploaded_input_file.name)
 
-        # Write file to disk in chunks (NO RAM overload)
-        with open(temp_input_path, "wb") as f:
-            for chunk in uploaded_input_file.chunks(1024 * 1024):  # 1MB chunks
-                f.write(chunk)
+        with open(input_file_path, "wb") as f:
+            shutil.copyfileobj(uploaded_input_file, f)  # Stream file to disk
 
-        param["input_file"] = temp_input_path
-        st.success(f"✔ Input file saved to: {temp_input_path}")
+        param["input_file"] = input_file_path
+        st.success(f"✔ Input file saved to: {input_file_path}")
 
-    # FASTA file upload (store on disk)
+    # FASTA file upload (streaming directly to disk)
     uploaded_fasta = st.file_uploader("Upload FASTA File (Up to 1GB)", type=["fasta", "fa"])
     if uploaded_fasta:
-        temp_fasta_path = os.path.join(temp_dir, uploaded_fasta.name)
+        fasta_file_path = os.path.join(temp_dir, uploaded_fasta.name)
 
-        # Write file to disk in chunks
-        with open(temp_fasta_path, "wb") as f:
-            for chunk in uploaded_fasta.chunks(1024 * 1024):  # 1MB chunks
-                f.write(chunk)
+        with open(fasta_file_path, "wb") as f:
+            shutil.copyfileobj(uploaded_fasta, f)  # Stream file to disk
 
-        param["fasta_path"] = temp_fasta_path
-        st.success(f"✔ FASTA file saved to: {temp_fasta_path}")
+        param["fasta_path"] = fasta_file_path
+        st.success(f"✔ FASTA file saved to: {fasta_file_path}")
 
     # Output directory selection
     output_dir = st.text_input("Output Directory (Must be an Empty Folder)", value="")
@@ -153,12 +151,9 @@ def main():
         merge_qc(param)
         st.success("✅ Full pipeline completed!")
 
-    # Cleanup temp files (after running tasks)
-    if "input_file" in param and os.path.exists(param["input_file"]):
-        os.remove(param["input_file"])
-
-    if "fasta_path" in param and os.path.exists(param["fasta_path"]):
-        os.remove(param["fasta_path"])
+    # Cleanup temp directory (automatically deletes all temp files)
+    if os.path.exists(temp_dir):
+        shutil.rmtree(temp_dir)  # Deletes temp folder and all files inside it
 
 if __name__ == "__main__":
     main()
