@@ -5,12 +5,11 @@ import sqlite3
 import pandas as pd
 import tempfile
 import shutil
-import streamlit as st
 
 def get_peptides(param):
     """
     Function to digest a FASTA file into peptides and store the results in an SQLite database.
-    Now optimized for cloud environments using a temporary folder.
+    Uses a temporary directory for storage.
     """
 
     fasta_path = param['fasta_path']
@@ -20,11 +19,10 @@ def get_peptides(param):
     max_length = int(param['max_length'])
     m_cleavege = bool(param['m_cleavage'])
 
-    # ✅ Fix enzyme rule warning
     if enzyme == "trypsin/p":
-        enzyme = r'[KR](?!P)'
+        enzyme = r'[KR]'
 
-    # ✅ Create a temporary directory
+    # ✅ Create a Temporary Directory
     temp_dir = tempfile.mkdtemp()
     sqlite_path = os.path.join(temp_dir, "peptides.sqlite")
     print(f"📂 Using temporary directory: {temp_dir}")
@@ -32,23 +30,23 @@ def get_peptides(param):
     # ✅ Connect to SQLite and create table
     conn = sqlite3.connect(sqlite_path)
     cursor = conn.cursor()
-    cursor.execute("DROP TABLE IF EXISTS peptides;")  # Remove existing table
+    cursor.execute("DROP TABLE IF EXISTS peptides;")
     cursor.execute("CREATE TABLE peptides (peptide TEXT, protein TEXT);")
     conn.commit()
 
     print("🔍 Reading FASTA file and processing proteins...")
 
-    batch_data = []  # ✅ Store small batches of peptides before inserting into SQLite
-    batch_size = 5000  # ✅ Control memory usage by writing in chunks
+    batch_data = []  # ✅ Store small batches before inserting into SQLite
+    batch_size = 5000
 
-    # ✅ Process FASTA file (main digestion step)
+    # ✅ Process FASTA file
     with fasta.read(fasta_path) as entries:
         for header, sequence in tqdm(entries, desc="Processing Proteins"):
             peptides = parser.xcleave(
-                sequence, enzyme,
+                sequence,
+                enzyme,
                 missed_cleavages=missed_cleavages,
-                min_length=min_length,
-                regex=True
+                min_length=min_length
             )
 
             protein = header.split(" ")[0].split("|")[-1]
@@ -75,16 +73,16 @@ def get_peptides(param):
         with fasta.read(fasta_path) as entries:
             for header, sequence in tqdm(entries, desc="Processing m_cleavege Proteins"):
                 peptides = parser.xcleave(
-                    sequence[1:], enzyme,
+                    sequence[1:],  # Shift sequence by 1
+                    enzyme,
                     missed_cleavages=missed_cleavages,
-                    min_length=min_length,
-                    regex=True
+                    min_length=min_length
                 )
                 protein = header.split(" ")[0].split("|")[-1]
 
                 for start, peptide in peptides:
                     if len(peptide) <= max_length:
-                        pre_aa = sequence[start] if start > 0 else sequence[0]
+                        pre_aa = sequence[start] if start > 0 else "_"
                         post_aa = sequence[start + 1 + len(peptide)] if start + 1 + len(peptide) < len(sequence) else "_"
                         protein_info = f"{protein}:{start+1}:{pre_aa}:{post_aa}"
 
@@ -109,4 +107,4 @@ def get_peptides(param):
     print(f"✅ Peptides written to `{sqlite_path}`.")
     print(f"📁 SQLite file size: {os.path.getsize(sqlite_path) / 1024:.2f} KB")
 
-    return sqlite_path, temp_dir  # ✅ Return both SQLite file and temp directory
+    return sqlite_path, temp_dir  # ✅ Return SQLite file path & temp directory
