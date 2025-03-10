@@ -68,6 +68,7 @@ def get_peptides(param):
     # ✅ If `m_cleavege` flag is enabled, process again
     if m_cleavege:
         print("🔄 Running m_cleavage processing...")
+
         with fasta.read(fasta_path) as entries:
             for header, sequence in tqdm(entries, desc="Processing m_cleavege Proteins"):
                 peptides = parser.xcleave(
@@ -77,21 +78,19 @@ def get_peptides(param):
                     min_length=min_length
                 )
                 protein = header.split(" ")[0].split("|")[-1]
+
                 for start, peptide in peptides:
                     if len(peptide) <= max_length:
-                        m = dict()
-                        m['protein'] = protein
-                        m['start'] = start + 1
-                        try:
-                            m['pre_aa'] = sequence[start] if start > 0 else sequence[0]
-                        except:
-                            print(start)
-                        m['post_aa'] = sequence[start+1+len(peptide)] if start+1+len(peptide) < len(sequence) else "_"
-                        
+                        pre_aa = sequence[start] if start > 0 else sequence[0]
+                        post_aa = sequence[start+1+len(peptide)] if start+1+len(peptide) < len(sequence) else "_"
+                        protein_info = f"{protein}:{start+1}:{pre_aa}:{post_aa}"
+
+                        # ✅ Ensure uniqueness using `pep_map`
                         if peptide in pep_map:
-                            pep_map[peptide].add(m)
-                    else:
-                        pep_map[peptide] = [m]
+                            pep_map[peptide].add(protein_info)
+                        else:
+                            pep_map[peptide] = {protein_info}
+
     print(f"✅ Total unique peptides stored AFTER m_cleavege: {len(pep_map)}")
 
     print("Writing peptides to SQLite...")
