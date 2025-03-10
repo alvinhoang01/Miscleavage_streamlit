@@ -109,4 +109,10 @@ def get_peptides(param):
     print(f"✅ Peptides written to `{sqlite_path}`.")
     print(f"📁 SQLite file size: {os.path.getsize(sqlite_path) / 1024:.2f} KB")
 
+    if os.path.exists(sqlite_path):
+        print(f"✅ SQLite database successfully saved at: {sqlite_path}")
+    else:
+        print(f"❌ ERROR: SQLite database was NOT saved at: {sqlite_path}")
+
     return sqlite_path
+
