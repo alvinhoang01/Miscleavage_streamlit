@@ -10,6 +10,7 @@ def get_peptides(param):
     """
     Function to digest a FASTA file into peptides and store the results in an SQLite database.
     Now includes temporary folder handling for cloud processing.
+    Uses batch writing to prevent memory overload.
     """
 
     fasta_path = param['fasta_path']
@@ -19,8 +20,6 @@ def get_peptides(param):
     max_length = int(param['max_length'])
     m_cleavege = bool(param['m_cleavage'])
 
-    pep_map = dict()
-
     if enzyme == "trypsin/p":
         enzyme = r'[KR]'
 
@@ -29,7 +28,19 @@ def get_peptides(param):
     sqlite_path = os.path.join(temp_dir, "peptides.sqlite")
     print(f"📂 Using temporary directory: {temp_dir}")
 
-    print("🔍 Reading FASTA file...")
+    # ✅ Connect to SQLite and create table
+    conn = sqlite3.connect(sqlite_path)
+    cursor = conn.cursor()
+    cursor.execute("DROP TABLE IF EXISTS peptides;")
+    cursor.execute("CREATE TABLE peptides (peptide TEXT, protein TEXT);")
+    conn.commit()
+
+    print("🔍 Reading FASTA file and processing proteins...")
+
+    batch_data = []  # ✅ Store small batches before inserting into SQLite
+    batch_size = 5000  # ✅ Prevent memory overflow
+
+    # ✅ Process FASTA file
     with fasta.read(fasta_path) as entries:
         for header, sequence in tqdm(entries, desc="Processing Proteins"):
             peptides = parser.xcleave(
@@ -49,15 +60,20 @@ def get_peptides(param):
                         'post_aa': sequence[start+len(peptide)] if start+len(peptide) < len(sequence) else "_"
                     }
 
-                    if peptide in pep_map:
-                        pep_map[peptide].append(m)
-                    else:
-                        pep_map[peptide] = [m]
-    print(f"✅ Total unique peptides stored BEFORE m_cleavege: {len(pep_map)}")
+                    batch_data.append((peptide, f"{m['protein']}:{m['start']}:{m['pre_aa']}:{m['post_aa']}"))
+
+                # ✅ Insert batch into SQLite to free memory
+                if len(batch_data) >= batch_size:
+                    cursor.executemany("INSERT INTO peptides VALUES (?, ?);", batch_data)
+                    conn.commit()
+                    batch_data = []  # ✅ Clear batch
+
+    print(f"✅ Peptides stored BEFORE m_cleavege: {len(batch_data)} (final batch size)")
 
     # ✅ If `m_cleavege` flag is enabled, process again
     if m_cleavege:
         print("🔄 Running m_cleavage processing...")
+
         with fasta.read(fasta_path) as entries:
             for header, sequence in tqdm(entries, desc="Processing m_cleavege Proteins"):
                 peptides = parser.xcleave(
@@ -67,41 +83,35 @@ def get_peptides(param):
                     min_length=min_length
                 )
                 protein = header.split(" ")[0].split("|")[-1]
+
                 for start, peptide in peptides:
                     if len(peptide) <= max_length:
-                        m = dict()
-                        m['protein'] = protein
-                        m['start'] = start + 1
-                        try:
-                            m['pre_aa'] = sequence[start] if start > 0 else sequence[0]
-                        except:
-                            print(start)
-                        m['post_aa'] = sequence[start+1+len(peptide)] if start+1+len(peptide) < len(sequence) else "_"
-                        
-                        if peptide in pep_map:
-                            pep_map[peptide].append(m)
-                    else:
-                        pep_map[peptide] = [m]
-    print(f"✅ Total unique peptides stored AFTER m_cleavege: {len(pep_map)}")
+                        m = {
+                            'protein': protein,
+                            'start': start + 1,
+                            'pre_aa': sequence[start] if start > 0 else "_",
+                            'post_aa': sequence[start+1+len(peptide)] if start+1+len(peptide) < len(sequence) else "_"
+                        }
 
-    print("Writing peptides to DataFrame...")
-    rows = []
-    for pep in tqdm(pep_map):
-        proteins = sorted(list(pep_map[pep]), key=lambda x: x['protein'])
-        proteins = [f"{p['protein']}:{p['start']}:{p['pre_aa']}:{p['post_aa']}" for p in proteins]
-        proteins = set(proteins)
-        proteins_str = ";".join(sorted(list(proteins)))
-        rows.append((pep, proteins_str))
-        
-    df = pd.DataFrame(rows, columns=["peptide", "protein"])
+                        batch_data.append((peptide, f"{m['protein']}:{m['start']}:{m['pre_aa']}:{m['post_aa']}"))
 
-    # ✅ Save to SQLite inside the temp directory
-    conn = sqlite3.connect(sqlite_path)
-    df.to_sql('peptides', conn, if_exists='replace', index=False)
+                    # ✅ Insert batch into SQLite to free memory
+                    if len(batch_data) >= batch_size:
+                        cursor.executemany("INSERT INTO peptides VALUES (?, ?);", batch_data)
+                        conn.commit()
+                        batch_data = []  # ✅ Clear batch
+
+    print(f"✅ Peptides stored AFTER m_cleavege: {len(batch_data)} (final batch size)")
+
+    # ✅ Final batch insert (in case there are leftovers)
+    if batch_data:
+        cursor.executemany("INSERT INTO peptides VALUES (?, ?);", batch_data)
+        conn.commit()
+
     conn.close()
 
     print(f"✅ Peptides written to `{sqlite_path}`.")
-    print(f"📊 Final database contains {len(df)} peptides.")
+    print(f"📊 Final database contains peptides.")
     print(f"📁 SQLite file size: {os.path.getsize(sqlite_path) / 1024:.2f} KB")
 
     return sqlite_path, temp_dir  # ✅ Return SQLite path & temp dir
