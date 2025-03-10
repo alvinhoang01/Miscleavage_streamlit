@@ -50,11 +50,15 @@ def provide_yaml_download():
         mime="text/yaml",
     )
 
-# Cache function to load large files efficiently
-@st.cache_data
-def load_large_file(file_path):
-    """Load a sample of the large file to reduce memory usage."""
-    return pd.read_csv(file_path, nrows=1000)  # Limit rows to avoid memory crash
+# Function to stream file upload directly to disk (fixes memory crash)
+def save_uploaded_file(uploaded_file, temp_dir):
+    file_path = os.path.join(temp_dir, uploaded_file.name)
+
+    # Open file in write-binary mode and write in chunks
+    with open(file_path, "wb") as f:
+        shutil.copyfileobj(uploaded_file, f)  # Streams directly to disk (no RAM usage)
+
+    return file_path
 
 # Streamlit UI
 def main():
@@ -84,33 +88,17 @@ def main():
     # Create a temp directory to store files (ensures unique files for each user)
     temp_dir = tempfile.mkdtemp()
 
-    # Input file upload (streaming directly to disk, no RAM usage)
+    # Input file upload (stream directly to disk, no buffering in RAM)
     uploaded_input_file = st.file_uploader("Upload Input File (Up to 1GB)", type=["tsv", "csv", "txt"])
     if uploaded_input_file:
-        input_file_path = os.path.join(temp_dir, uploaded_input_file.name)
-
-        with open(input_file_path, "wb") as f:
-            shutil.copyfileobj(uploaded_input_file, f)  # Stream file to disk
-
+        input_file_path = save_uploaded_file(uploaded_input_file, temp_dir)
         param["input_file"] = input_file_path
         st.success(f"✔ Input file saved to: {input_file_path}")
 
-        # Load only a small sample for preview (prevents full file loading in RAM)
-        try:
-            df_sample = load_large_file(input_file_path)
-            st.write("📊 Preview of Uploaded File (Limited to 1000 Rows):")
-            st.dataframe(df_sample)
-        except Exception as e:
-            st.error(f"Error loading sample: {e}")
-
-    # FASTA file upload (streaming directly to disk)
+    # FASTA file upload (stream directly to disk)
     uploaded_fasta = st.file_uploader("Upload FASTA File (Up to 1GB)", type=["fasta", "fa"])
     if uploaded_fasta:
-        fasta_file_path = os.path.join(temp_dir, uploaded_fasta.name)
-
-        with open(fasta_file_path, "wb") as f:
-            shutil.copyfileobj(uploaded_fasta, f)  # Stream file to disk
-
+        fasta_file_path = save_uploaded_file(uploaded_fasta, temp_dir)
         param["fasta_path"] = fasta_file_path
         st.success(f"✔ FASTA file saved to: {fasta_file_path}")
 
