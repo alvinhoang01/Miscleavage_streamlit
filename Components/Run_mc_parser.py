@@ -54,14 +54,14 @@ def main():
     st.title("Run Tasks")
 
     # Provide the actual YAML file for download
-    st.write("### Download and Modify the Default YAML File")
+    st.write("### Download Default YAML File")
     if os.path.exists("param/mc_parser.yml"):
         provide_yaml_download()
     else:
         st.error("⚠ Default YAML file not found!")
 
     # User uploads their YAML file
-    uploaded_yaml = st.file_uploader("Upload Modified YAML File", type=["yaml", "yml"])
+    uploaded_yaml = st.file_uploader("Upload YAML File", type=["yaml", "yml"])
     if not uploaded_yaml:
         st.warning("⚠ Please upload a YAML file to proceed.")
         return
@@ -74,25 +74,32 @@ def main():
     st.write("### Parameters Preview:")
     st.json(param)
 
-    # Input file upload (use temp file instead of storing in memory)
+    # Input file upload (store on disk, not in RAM)
     uploaded_input_file = st.file_uploader("Upload Input File (Up to 1GB)", type=["tsv", "csv", "txt"])
     if uploaded_input_file:
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".tsv") as tmp_file:
-            tmp_file.write(uploaded_input_file.getbuffer())
-            temp_input_path = tmp_file.name
-        
-        param["input_file"] = temp_input_path
-        st.success(f"✔ Input file uploaded and saved at {temp_input_path}")
+        temp_dir = tempfile.gettempdir()  # Get system temp directory
+        temp_input_path = os.path.join(temp_dir, uploaded_input_file.name)
 
-    # FASTA file upload (use temp file)
+        # Write file to disk in chunks (NO RAM overload)
+        with open(temp_input_path, "wb") as f:
+            for chunk in uploaded_input_file.chunks(1024 * 1024):  # 1MB chunks
+                f.write(chunk)
+
+        param["input_file"] = temp_input_path
+        st.success(f"✔ Input file saved to: {temp_input_path}")
+
+    # FASTA file upload (store on disk)
     uploaded_fasta = st.file_uploader("Upload FASTA File (Up to 1GB)", type=["fasta", "fa"])
     if uploaded_fasta:
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".fasta") as tmp_fasta:
-            tmp_fasta.write(uploaded_fasta.getbuffer())
-            temp_fasta_path = tmp_fasta.name
+        temp_fasta_path = os.path.join(temp_dir, uploaded_fasta.name)
+
+        # Write file to disk in chunks
+        with open(temp_fasta_path, "wb") as f:
+            for chunk in uploaded_fasta.chunks(1024 * 1024):  # 1MB chunks
+                f.write(chunk)
 
         param["fasta_path"] = temp_fasta_path
-        st.success(f"✔ FASTA file uploaded and saved at {temp_fasta_path}")
+        st.success(f"✔ FASTA file saved to: {temp_fasta_path}")
 
     # Output directory selection
     output_dir = st.text_input("Output Directory (Must be an Empty Folder)", value="")
