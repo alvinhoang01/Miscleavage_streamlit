@@ -31,6 +31,11 @@ def split_dia(param):
         df.to_csv(output_path, index=False, sep="\t")
         print(f"{sample} was saved to {output_path}")
 
+    # ✅ Ensure Files Are Created
+    if not os.listdir(output_dir):
+        print("⚠ No split files were created!")
+        return None, None
+
     # ✅ Zip the folder
     zip_path = os.path.join(temp_dir, "split_results.zip")
     shutil.make_archive(zip_path.replace(".zip", ""), 'zip', output_dir)
