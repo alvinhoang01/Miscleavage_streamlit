@@ -153,6 +153,7 @@ def main():
         st.success(f"✅ FASTA file uploaded")
 
     # Output directory selection
+    output_dir = None
     output_dir = st.text_input("Output Directory (Must be an Empty Folder)", value="")
     param["output_dir"] = output_dir
     if output_dir:
