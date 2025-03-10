@@ -3,6 +3,7 @@ import yaml
 import os
 import io
 import pandas as pd
+import tempfile
 from tools.split_dia import split_dia
 from tools.prepare import get_peptides
 from tools.qc import qc_all
@@ -53,14 +54,14 @@ def main():
     st.title("Run Tasks")
 
     # Provide the actual YAML file for download
-    st.write("### Download Default YAML File")
+    st.write("### Download and Modify the Default YAML File")
     if os.path.exists("param/mc_parser.yml"):
         provide_yaml_download()
     else:
         st.error("⚠ Default YAML file not found!")
 
     # User uploads their YAML file
-    uploaded_yaml = st.file_uploader("Upload YAML File", type=["yaml", "yml"])
+    uploaded_yaml = st.file_uploader("Upload Modified YAML File", type=["yaml", "yml"])
     if not uploaded_yaml:
         st.warning("⚠ Please upload a YAML file to proceed.")
         return
@@ -73,32 +74,25 @@ def main():
     st.write("### Parameters Preview:")
     st.json(param)
 
-    # Input file upload (streaming instead of loading full file)
+    # Input file upload (use temp file instead of storing in memory)
     uploaded_input_file = st.file_uploader("Upload Input File (Up to 1GB)", type=["tsv", "csv", "txt"])
     if uploaded_input_file:
-        param["input_file"] = uploaded_input_file  # Store reference, not full file
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".tsv") as tmp_file:
+            tmp_file.write(uploaded_input_file.getbuffer())
+            temp_input_path = tmp_file.name
+        
+        param["input_file"] = temp_input_path
+        st.success(f"✔ Input file uploaded and saved at {temp_input_path}")
 
-        # Stream large files instead of loading into memory
-        file_size = len(uploaded_input_file.getvalue()) / (1024 * 1024)  # Convert to MB
-        st.write(f"📁 File size: {file_size:.2f} MB")
-
-        st.write("Processing file in chunks to avoid memory overload...")
-        try:
-            chunk_size = 50000  # Process 50,000 rows at a time
-            df_iterator = pd.read_csv(uploaded_input_file, sep="\t", chunksize=chunk_size)
-            for chunk in df_iterator:
-                st.write(f"✅ Processed {chunk.shape[0]} rows...")
-                # Process each chunk here
-
-            st.success("🎉 File processed successfully!")
-        except Exception as e:
-            st.error(f"Error processing file: {e}")
-
-    # FASTA file upload (streaming instead of full loading)
+    # FASTA file upload (use temp file)
     uploaded_fasta = st.file_uploader("Upload FASTA File (Up to 1GB)", type=["fasta", "fa"])
     if uploaded_fasta:
-        param["fasta_path"] = io.TextIOWrapper(uploaded_fasta, encoding="utf-8")  # Stream instead of full load
-        st.success(f"✔ FASTA file uploaded: {uploaded_fasta.name}")
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".fasta") as tmp_fasta:
+            tmp_fasta.write(uploaded_fasta.getbuffer())
+            temp_fasta_path = tmp_fasta.name
+
+        param["fasta_path"] = temp_fasta_path
+        st.success(f"✔ FASTA file uploaded and saved at {temp_fasta_path}")
 
     # Output directory selection
     output_dir = st.text_input("Output Directory (Must be an Empty Folder)", value="")
@@ -151,6 +145,13 @@ def main():
         compare_all(param)
         merge_qc(param)
         st.success("✅ Full pipeline completed!")
+
+    # Cleanup temp files (after running tasks)
+    if "input_file" in param and os.path.exists(param["input_file"]):
+        os.remove(param["input_file"])
+
+    if "fasta_path" in param and os.path.exists(param["fasta_path"]):
+        os.remove(param["fasta_path"])
 
 if __name__ == "__main__":
     main()
