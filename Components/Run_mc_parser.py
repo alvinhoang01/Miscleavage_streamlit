@@ -153,13 +153,11 @@ def main():
         st.success(f"✅ FASTA file uploaded")
 
     # Output directory selection
-    output_dir = param['output_dir']
-    print(f"🔍 Output directory received: {output_dir}")
+    output_dir = st.text_input("Output Directory (Must be an Empty Folder)", value="")
+    param["output_dir"] = output_dir
+    if output_dir:
+        st.success(f"✅ Output directory uploaded")
 
-    # Ensure the directory exists
-    if not os.path.exists(output_dir):
-        os.makedirs(output_dir, exist_ok=True)  # Ensure directory is created
-        print(f"✅ Created output directory: {output_dir}")
 
     # Task Execution Section
     st.write("## Run Tasks")
