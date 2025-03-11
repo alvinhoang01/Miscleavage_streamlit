@@ -35,7 +35,7 @@ if "uploaded_files" not in st.session_state:
 if "temp_dir" not in st.session_state:
     st.session_state.temp_dir = tempfile.mkdtemp()
 
-# ✅ Function to read the YAML parameter file
+# ✅ Function to read YAML parameter file
 def load_yaml(uploaded_file):
     return yaml.load(uploaded_file, Loader=yaml.FullLoader)
 
@@ -52,26 +52,25 @@ def provide_yaml_download():
         mime="text/yaml",
     )
 
-# ✅ Function to manually handle large file uploads
+# ✅ Function to save uploaded files to disk (avoids RAM issues)
 def save_uploaded_file(uploaded_file):
-    """Stream the file to disk instead of loading it into RAM."""
-    temp_dir = st.session_state.temp_dir  # Use the temporary directory
+    """Stream uploaded file directly to disk to prevent memory issues."""
+    temp_dir = st.session_state.temp_dir  # Use shared temporary directory
     file_path = os.path.join(temp_dir, uploaded_file.name)
 
     with open(file_path, "wb") as f:
-        while chunk := uploaded_file.read(1024 * 1024):  # ✅ Process in 1MB chunks
-            f.write(chunk)
+        shutil.copyfileobj(uploaded_file, f)  # Stream file to disk
 
-    st.session_state.uploaded_files.append(file_path)  # Track file
+    st.session_state.uploaded_files.append(file_path)  # Track uploaded files
     return file_path
 
 # ✅ Function to delete tracked files
 def cleanup_files():
-    """Delete temporary files after processing."""
+    """Delete all temporary files after processing."""
     temp_dir = st.session_state.temp_dir
     if os.path.exists(temp_dir):
-        shutil.rmtree(temp_dir)  # ✅ Delete temp folder
-        st.session_state.uploaded_files = []  # Clear session tracking
+        shutil.rmtree(temp_dir)  # Delete entire temp folder
+        st.session_state.uploaded_files = []  # Reset session tracking
         st.session_state.temp_dir = tempfile.mkdtemp()  # Create a new temp directory
         st.write("🗑 Temporary files cleaned up!")
 
@@ -100,9 +99,8 @@ def main():
     st.write("### Parameters Preview:")
     st.json(param)
 
-    # ✅ User uploads large input file (processed in chunks)
-    uploaded_input_file = st.file_uploader("Upload Input File (Up to 5GB)", type=["tsv", "csv", "txt"])
-    input_file_path = None
+    # ✅ User uploads input file (processed in chunks)
+    uploaded_input_file = st.file_uploader("Upload Input File", type=["tsv", "csv", "txt"])
     if uploaded_input_file:
         input_file_path = save_uploaded_file(uploaded_input_file)
         param["input_file"] = input_file_path
@@ -110,7 +108,6 @@ def main():
 
     # ✅ User uploads FASTA file (also saved to disk)
     uploaded_fasta = st.file_uploader("Upload FASTA File", type=["fasta", "fa"])
-    fasta_path = None
     if uploaded_fasta:
         fasta_path = save_uploaded_file(uploaded_fasta)
         param["fasta_path"] = fasta_path
@@ -156,7 +153,6 @@ def main():
                     )
                 st.success("📂 Split results ready for download!")
 
-
     with col2:
         if st.button("▶ Run QC Task"):
             st.write("Running QC task...")
@@ -170,8 +166,8 @@ def main():
             st.success("✔ Compare task completed!")
 
     # ✅ Run Full Pipeline
-    st.write("## 🔄 Run Full Pipeline")
-    if st.button("🔄 Run All Tasks Sequentially"):
+    st.write("## 🔄 Run All Tasks Sequentially")
+    if st.button("🔄 Run Full Pipeline"):
         st.write("🛠 Running Prepare task...")
         get_peptides(param)
         st.success("✔ Prepare completed")
