@@ -3,4 +3,4 @@ missed_cleavage: 2
 min_length: 7
 max_length: 52
 m_cleavage: True
-workers: 2
+workers: 1
