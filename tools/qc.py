@@ -3,6 +3,7 @@ import os,re,sys
 from tqdm import tqdm
 import sqlite3
 import streamlit as st
+import gc
 
 
 from concurrent.futures import ProcessPoolExecutor, as_completed
@@ -136,6 +137,7 @@ def qc_all(param):
                 logs.append(error_msg)
                 print(error_msg)
 
+    gc.collect()  # Free memory at the end of batch processing
     logs.append(f"✅ QC completed. Output stored in `{step2_dir}`")
     print(f"✅ QC completed. Output stored in `{step2_dir}`")
 
@@ -192,7 +194,11 @@ def qc_one_trypsinp(path, output_dir,sqlite_path, enz):
     pep_map = load_pep_map(sqlite_path)
  
     
-    df = pd.read_csv(path,sep="\t")
+    df_iter = pd.read_csv(path, sep="\t", chunksize=10000)
+    df = pd.concat(df_iter, ignore_index=True)
+    del df_iter  # Free memory used by the iterator
+    gc.collect()  # Explicitly run garbage collection
+
     sample = df.columns[-1]
     # QC 1 identified peptides
     # remove nan values, only keep the peptides identified in this sample
@@ -251,6 +257,8 @@ def qc_one_trypsinp(path, output_dir,sqlite_path, enz):
     print("Calculating the peptide uniqueness...")
     df_nodup = df_nodup.copy()
     df_nodup.loc[:,'Uniquness'] = [is_unique_peptide(i,pep_map) for i in df_nodup['PEP.StrippedSequence']]
+    del pep_map  # Free memory from the cached peptide-protein mapping if it's no longer needed
+    gc.collect()
     
     ratio_peptide_uniquness = df_nodup[df_nodup['Uniquness'] == True].shape[0] / df_nodup.shape[0]
     
@@ -304,6 +312,8 @@ def qc_one_trypsinp(path, output_dir,sqlite_path, enz):
 
     
     df_mc2.to_csv(out_mc2_path,sep="\t",index=False)
+    del df_mc2  # Free memory
+    gc.collect()
     
     
     print(f"Results have been written to {out_mc2_path}")
@@ -347,11 +357,16 @@ def qc_one(path, output_dir,sqlite_path, enz):
 
     
     
-    df = pd.read_csv(path,sep="\t")
+    df_iter = pd.read_csv(path, sep="\t", chunksize=10000)
+    df = pd.concat(df_iter, ignore_index=True)
+    del df_iter  # Free memory used by the iterator
+    gc.collect()  # Explicitly run garbage collection
     sample = df.columns[-1]
     # QC 1 identified peptides
     # remove nan values, only keep the peptides identified in this sample
     df_na = df.dropna()
+    del df  # Free memory from the original large DataFrame
+    gc.collect()
     
     
     peptide_count = df_na['PEP.StrippedSequence'].unique().shape[0]
@@ -424,6 +439,8 @@ def qc_one(path, output_dir,sqlite_path, enz):
     out_mc2_path = os.path.join(output_dir,base_name + "_mc2.tsv")
     df_mc2.to_csv(out_mc2_path,sep="\t",index=False)
     print(f"Results have been written to {out_mc2_path}")
+    del df_mc2  # Free memory
+    gc.collect()
     
     results = {
         'sample_name': base_name,
