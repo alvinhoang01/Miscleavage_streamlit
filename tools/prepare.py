@@ -2,9 +2,6 @@ from pyteomics import fasta, parser
 from tqdm import tqdm
 import os
 import sqlite3
-import pandas as pd
-import tempfile
-import shutil
 
 def get_peptides(param):
     """
@@ -13,6 +10,12 @@ def get_peptides(param):
     """
 
     fasta_path = param['fasta_path']
+    output_dir = param['output_dir']  # ✅ Ensure we use the same output directory
+    os.makedirs(output_dir, exist_ok=True)  # ✅ Make sure the output directory exists
+
+    sqlite_path = os.path.join(output_dir, "peptides.sqlite")  # ✅ Store SQLite in output_dir
+    print(f"📂 Storing peptides in: {sqlite_path}")
+
     enzyme = param['enzyme']
     missed_cleavages = int(param['missed_cleavage'])
     min_length = int(param['min_length'])
@@ -21,11 +24,6 @@ def get_peptides(param):
 
     if enzyme == "trypsin/p":
         enzyme = r'[KR]'
-
-    # ✅ Create a Temporary Directory
-    temp_dir = tempfile.mkdtemp()
-    sqlite_path = os.path.join(temp_dir, "peptides.sqlite")
-    print(f"📂 Using temporary directory: {temp_dir}")
 
     # ✅ Connect to SQLite and create table
     conn = sqlite3.connect(sqlite_path)
@@ -36,7 +34,7 @@ def get_peptides(param):
 
     print("🔍 Reading FASTA file and processing proteins...")
 
-    pep_map = {}  # ✅ Bring back `pep_map` for unique peptide mapping
+    pep_map = {}  # ✅ Store unique peptide-to-protein mappings
     batch_data = []  # ✅ Store small batches before inserting into SQLite
     batch_size = 5000  # ✅ Prevent memory overflow
 
@@ -116,4 +114,4 @@ def get_peptides(param):
     print(f"📊 Final database contains {len(pep_map)} peptides.")
     print(f"📁 SQLite file size: {os.path.getsize(sqlite_path) / 1024:.2f} KB")
 
-    return sqlite_path, temp_dir  # ✅ Return SQLite path & temp dir
+    return sqlite_path  # ✅ Return SQLite path (no separate temp_dir needed)

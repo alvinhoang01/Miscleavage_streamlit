@@ -61,57 +61,75 @@ def check_missed_cleavages_for_trypsin(sequence,pep_map):
  
 
 def qc_all(param):
-    print(f"🚀 Running QC for all samples...")
+    """
+    Function to run QC on all split files.
+    :param param: Dictionary of parameters loaded from YAML.
+    :return: List of logs/messages for Streamlit UI.
+    """
 
-    # ✅ Use a Temporary Directory for QC Output
-    temp_dir = tempfile.mkdtemp()
-    step2_qc_dir = os.path.join(temp_dir, "step2-qc")
-    os.makedirs(step2_qc_dir, exist_ok=True)
-    print(f"📂 QC output directory created: {step2_qc_dir}")
+    logs = []  # ✅ Store messages for UI
+    output_dir = param['output_dir']
+    enzyme = param["enzyme"]
+    
+    # ✅ Define input and output directories
+    step1_dir = os.path.join(output_dir, "step1-split")
+    step2_dir = os.path.join(output_dir, "step2-qc")
+    os.makedirs(step2_dir, exist_ok=True)  # ✅ Ensure QC output directory exists
 
-    # ✅ Ensure the required input files exist
-    step1_dir = os.path.join(param['output_dir'], "step1-split")
-    sqlite_path = os.path.join(param['output_dir'], "peptides.sqlite")
-
-    if not os.path.exists(sqlite_path):
-        print("❌ Error: Missing peptides.sqlite. Run 'Prepare Task' first.")
-        return None, None
-
+    # ✅ Ensure the input directory exists
     if not os.path.exists(step1_dir) or not os.listdir(step1_dir):
-        print("❌ Error: Missing step1-split folder. Run 'Split Task' first.")
-        return None, None
+        error_msg = "❌ Error: Missing `step1-split` folder!"
+        logs.append(error_msg)
+        print(error_msg)
+        return logs
 
-    files = [i for i in os.listdir(step1_dir) if re.search(r".split.tsv", i)]
-    workers = int(param['workers'])
-    enz = param["enzyme"]
+    # ✅ Ensure SQLite database exists
+    sqlite_path = os.path.join(output_dir, "peptides.sqlite")
+    if not os.path.exists(sqlite_path):
+        error_msg = "❌ Error: Missing `peptides.sqlite`!"
+        logs.append(error_msg)
+        print(error_msg)
+        return logs
+
+    # ✅ List all split files
+    files = [f for f in os.listdir(step1_dir) if f.endswith(".split.tsv")]
 
     if not files:
-        print("⚠ No split files found! Exiting QC process.")
-        return None, None
+        warning_msg = "⚠ No split files found! Skipping QC."
+        logs.append(warning_msg)
+        print(warning_msg)
+        return logs
+
+    workers = int(param.get('workers', 4))  # Default to 4 workers if not specified
+    logs.append(f"🚀 Running QC with {workers} workers...")
 
     # ✅ Run QC in parallel using ProcessPoolExecutor
-    print(f"🧪 Processing QC with {workers} workers...")
     futures = []
     with ProcessPoolExecutor(max_workers=workers) as executor:
-        if enz == "trypsin/p":
+        if enzyme == "trypsin/p":
             for f in files:
-                futures.append(executor.submit(qc_one_trypsinp, os.path.join(step1_dir, f), step2_qc_dir, sqlite_path, enz))
+                futures.append(
+                    executor.submit(qc_one_trypsinp, os.path.join(step1_dir, f), step2_dir, sqlite_path, enzyme)
+                )
         else:
             for f in files:
-                futures.append(executor.submit(qc_one, os.path.join(step1_dir, f), step2_qc_dir, sqlite_path, enz))
-        
+                futures.append(
+                    executor.submit(qc_one, os.path.join(step1_dir, f), step2_dir, sqlite_path, enzyme)
+                )
+
         for future in as_completed(futures):
             try:
-                future.result()  # Get results and handle any errors
+                result = future.result()  # Catch errors
+                logs.append(result)
             except Exception as e:
-                print(f"❌ Error processing a file: {e}")
+                error_msg = f"❌ Error processing a file: {e}"
+                logs.append(error_msg)
+                print(error_msg)
 
-    # ✅ Zip the QC output folder
-    zip_qc_path = os.path.join(temp_dir, "step2-qc.zip")
-    shutil.make_archive(zip_qc_path.replace(".zip", ""), 'zip', step2_qc_dir)
-    print(f"📁 QC output files zipped at: {zip_qc_path}")
+    logs.append(f"✅ QC completed. Output stored in `{step2_dir}`")
+    print(f"✅ QC completed. Output stored in `{step2_dir}`")
 
-    return zip_qc_path, temp_dir  # ✅ Return zip path & temp folder
+    return logs  # ✅ Return logs for Streamlit UI
         
 def calc_quant_for_fragment_pep(df_mc, pep_map, pep_quant_map, sample):
     rows = []

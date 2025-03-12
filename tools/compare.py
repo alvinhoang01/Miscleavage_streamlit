@@ -10,21 +10,34 @@ import matplotlib.pyplot as plt
 from concurrent.futures import ProcessPoolExecutor, as_completed
 
 def merge_qc(param):
+    """
+    Merges all QC results into a single file.
+    :param param: Dictionary of parameters loaded from YAML.
+    """
+
     output_dir = param['output_dir']
-    step3_dir = os.path.join(output_dir,"step3-compare")
-    step2_dir = os.path.join(output_dir,"step2-qc")
-    if not os.path.exists(step3_dir):
-        os.makedirs(step3_dir)
-        
-    files = [i for i in os.listdir(step2_dir) if i.endswith("_qc.tsv")]
-    
-    df_list = []
-    for i in files:
-        df = pd.read_csv(os.path.join(step2_dir, i), sep="\t")
-        df_list.append(df)
-        
-    df = pd.concat(df_list)
-    df.to_csv(os.path.join(step3_dir, "merged_qc.tsv"), sep="\t", index=False)
+    step3_dir = os.path.join(output_dir, "step3-compare")
+    step2_dir = os.path.join(output_dir, "step2-qc")
+
+    # ✅ Ensure step3-compare directory exists
+    os.makedirs(step3_dir, exist_ok=True)
+
+    # ✅ Get all QC files
+    files = [f for f in os.listdir(step2_dir) if f.endswith("_qc.tsv")]
+
+    if not files:
+        print("⚠ No QC files found! Skipping merging step.")
+        return
+
+    # ✅ Read and concatenate all QC files
+    df_list = [pd.read_csv(os.path.join(step2_dir, f), sep="\t") for f in files]
+    merged_df = pd.concat(df_list)
+
+    # ✅ Save merged QC file
+    merged_qc_path = os.path.join(step3_dir, "merged_qc.tsv")
+    merged_df.to_csv(merged_qc_path, sep="\t", index=False)
+
+    print(f"✅ Merged QC saved to {merged_qc_path}")
         
         
 
