@@ -1,8 +1,8 @@
 import pandas as pd
 import os,re,sys
+import yaml
 from tqdm import tqdm
 import sqlite3
-import gc
 
 
 from concurrent.futures import ProcessPoolExecutor, as_completed
@@ -76,7 +76,7 @@ def qc_all(param):
 
     # ✅ Ensure the input directory exists
     if not os.path.exists(step1_dir) or not os.listdir(step1_dir):
-        error_msg = "❌ Error: Missing `step1-split` folder!"
+        error_msg = "❌ Error: Missing `step1-split` folder! Run 'Split Task' first."
         logs.append(error_msg)
         print(error_msg)
         return logs
@@ -84,7 +84,7 @@ def qc_all(param):
     # ✅ Ensure SQLite database exists
     sqlite_path = os.path.join(output_dir, "peptides.sqlite")
     if not os.path.exists(sqlite_path):
-        error_msg = "❌ Error: Missing `peptides.sqlite`!"
+        error_msg = "❌ Error: Missing `peptides.sqlite`! Run 'Prepare Task' first."
         logs.append(error_msg)
         print(error_msg)
         return logs
@@ -124,7 +124,6 @@ def qc_all(param):
                 logs.append(error_msg)
                 print(error_msg)
 
-    gc.collect()  # Free memory at the end of batch processing
     logs.append(f"✅ QC completed. Output stored in `{step2_dir}`")
     print(f"✅ QC completed. Output stored in `{step2_dir}`")
 
@@ -308,8 +307,6 @@ def qc_one_trypsinp(path, output_dir,sqlite_path, enz):
     df_mc2 = pd.DataFrame(rows)
     
     df_mc2.to_csv(out_mc2_path,sep="\t",index=False)
-    del df_mc2  # Free memory
-    gc.collect()
     
     
     print(f"Results have been written to {out_mc2_path}")
@@ -374,8 +371,6 @@ def qc_one(path, output_dir,sqlite_path, enz):
     # QC 1 identified peptides
     # remove nan values, only keep the peptides identified in this sample
     df_na = df.dropna()
-    del df  # Free memory from the original large DataFrame
-    gc.collect()
     
     
     peptide_count = df_na['PEP.StrippedSequence'].unique().shape[0]
@@ -448,8 +443,6 @@ def qc_one(path, output_dir,sqlite_path, enz):
     out_mc2_path = os.path.join(output_dir,base_name + "_mc2.tsv")
     df_mc2.to_csv(out_mc2_path,sep="\t",index=False)
     print(f"Results have been written to {out_mc2_path}")
-    del df_mc2  # Free memory
-    gc.collect()
     
     results = {
         'sample_name': base_name,
