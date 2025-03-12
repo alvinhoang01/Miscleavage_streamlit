@@ -139,14 +139,14 @@ def main():
     # ✅ User uploads input file (processed in chunks)
     uploaded_input_file = st.file_uploader("Upload Input File", type=["tsv", "csv", "txt"])
     if uploaded_input_file:
-        input_file_path = save_uploaded_file(uploaded_input_file)
+        input_file_path = save_uploaded_file(uploaded_input_file, "Input file")
         param["input_file"] = input_file_path
         st.success(f"✔ Input file uploaded")
 
     # ✅ User uploads FASTA file (also saved to disk)
     uploaded_fasta = st.file_uploader("Upload FASTA File", type=["fasta", "fa"])
     if uploaded_fasta:
-        fasta_path = save_uploaded_file(uploaded_fasta)
+        fasta_path = save_uploaded_file(uploaded_fasta, "FASTA file")
         param["fasta_path"] = fasta_path
         st.success(f"✅ FASTA file uploaded")
 
