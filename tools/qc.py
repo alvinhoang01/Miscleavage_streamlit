@@ -3,6 +3,8 @@ import os,re,sys
 import yaml
 from tqdm import tqdm
 import sqlite3
+import tempfile
+import shutil
 
 
 from concurrent.futures import ProcessPoolExecutor, as_completed
@@ -59,45 +61,57 @@ def check_missed_cleavages_for_trypsin(sequence,pep_map):
  
 
 def qc_all(param):
-    print(f"QC for all samples")
-    output_dir = param['output_dir']
-    enz = param["enzyme"]
-    
-    step1_dir = os.path.join(output_dir,"step1-split")
-    step2_dir = os.path.join(output_dir,"step2-qc")
-    if not os.path.exists(step2_dir):
-        os.makedirs(step2_dir)
-    files = [i for i in os.listdir(step1_dir) if re.search(r".split.tsv",i)]
-    
-    sqlite_path = os.path.join(output_dir, "peptides.sqlite")
-    
+    print(f"🚀 Running QC for all samples...")
 
-    # for f in files:
-    #     fn = os.path.join(step1_dir,f)
-    #     qc_one(fn, step2_dir, sqlite_path)
+    # ✅ Use a Temporary Directory for QC Output
+    temp_dir = tempfile.mkdtemp()
+    step2_qc_dir = os.path.join(temp_dir, "step2-qc")
+    os.makedirs(step2_qc_dir, exist_ok=True)
+    print(f"📂 QC output directory created: {step2_qc_dir}")
+
+    # ✅ Ensure the required input files exist
+    step1_dir = os.path.join(param['output_dir'], "step1-split")
+    sqlite_path = os.path.join(param['output_dir'], "peptides.sqlite")
+
+    if not os.path.exists(sqlite_path):
+        print("❌ Error: Missing peptides.sqlite. Run 'Prepare Task' first.")
+        return None, None
+
+    if not os.path.exists(step1_dir) or not os.listdir(step1_dir):
+        print("❌ Error: Missing step1-split folder. Run 'Split Task' first.")
+        return None, None
+
+    files = [i for i in os.listdir(step1_dir) if re.search(r".split.tsv", i)]
     workers = int(param['workers'])
-    
-    if enz == "trypsin/p":
-        with ProcessPoolExecutor(max_workers=workers) as executor:
-            futures = [executor.submit(qc_one_trypsinp, os.path.join(step1_dir, f), step2_dir, sqlite_path, enz)
-                    for f in files]
-            for future in as_completed(futures):
-                try:
-                    result = future.result()
-                except Exception as e:
-                    print(f"Error processing a file: {e}")
+    enz = param["enzyme"]
+
+    if not files:
+        print("⚠ No split files found! Exiting QC process.")
+        return None, None
+
+    # ✅ Run QC in parallel using ProcessPoolExecutor
+    print(f"🧪 Processing QC with {workers} workers...")
+    futures = []
+    with ProcessPoolExecutor(max_workers=workers) as executor:
+        if enz == "trypsin/p":
+            for f in files:
+                futures.append(executor.submit(qc_one_trypsinp, os.path.join(step1_dir, f), step2_qc_dir, sqlite_path, enz))
+        else:
+            for f in files:
+                futures.append(executor.submit(qc_one, os.path.join(step1_dir, f), step2_qc_dir, sqlite_path, enz))
         
-    else:
-        with ProcessPoolExecutor(max_workers=workers) as executor:
-            futures = [executor.submit(qc_one, os.path.join(step1_dir, f), step2_dir, sqlite_path, enz)
-                    for f in files]
-            for future in as_completed(futures):
-                try:
-                    result = future.result()
-                except Exception as e:
-                    print(f"Error processing a file: {e}")
-    
-    return
+        for future in as_completed(futures):
+            try:
+                future.result()  # Get results and handle any errors
+            except Exception as e:
+                print(f"❌ Error processing a file: {e}")
+
+    # ✅ Zip the QC output folder
+    zip_qc_path = os.path.join(temp_dir, "step2-qc.zip")
+    shutil.make_archive(zip_qc_path.replace(".zip", ""), 'zip', step2_qc_dir)
+    print(f"📁 QC output files zipped at: {zip_qc_path}")
+
+    return zip_qc_path, temp_dir  # ✅ Return zip path & temp folder
         
 def calc_quant_for_fragment_pep(df_mc, pep_map, pep_quant_map, sample):
     rows = []

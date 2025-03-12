@@ -104,14 +104,14 @@ def main():
     if uploaded_input_file:
         input_file_path = save_uploaded_file(uploaded_input_file)
         param["input_file"] = input_file_path
-        st.success(f"✔ Input file uploaded and saved at: {input_file_path}")
+        st.success(f"✔ Input file uploaded")
 
     # ✅ User uploads FASTA file (also saved to disk)
     uploaded_fasta = st.file_uploader("Upload FASTA File", type=["fasta", "fa"])
     if uploaded_fasta:
         fasta_path = save_uploaded_file(uploaded_fasta)
         param["fasta_path"] = fasta_path
-        st.success(f"✅ FASTA file uploaded and saved at: {fasta_path}")
+        st.success(f"✅ FASTA file uploaded")
 
     # ✅ Task Execution Section
     st.write("## Run Tasks")
@@ -155,9 +155,35 @@ def main():
 
     with col2:
         if st.button("▶ Run QC Task"):
-            st.write("Running QC task...")
-            qc_all(param)
-            st.success("✔ QC task completed!")
+            # ✅ Check if necessary files exist before running QC
+            sqlite_path = os.path.join(st.session_state.temp_dir, "peptides.sqlite")
+            step1_dir = os.path.join(st.session_state.temp_dir, "step1-split")
+
+            if not os.path.exists(sqlite_path):
+                st.error("⚠ Missing `peptides.sqlite`! Run 'Prepare Task' first.")
+                return
+            
+            if not os.path.exists(step1_dir) or not os.listdir(step1_dir):
+                st.error("⚠ Missing `step1-split` folder! Run 'Split Task' first.")
+                return
+
+            st.write("🔬 Running QC task...")
+            zip_qc_path, temp_dir = qc_all(param)
+
+            if zip_qc_path and os.path.exists(zip_qc_path):
+                st.success("✔ QC task completed!")
+
+                # ✅ Provide a download button for the QC results
+                with open(zip_qc_path, "rb") as file:
+                    st.download_button(
+                        label="📥 Download QC Results (ZIP)",
+                        data=file,
+                        file_name="step2-qc.zip",
+                        mime="application/zip"
+                    )
+                st.success("📂 QC results ready for download!")
+            else:
+                st.error("❌ QC process failed. Check logs for details.")
 
         if st.button("▶ Run Compare Task"):
             st.write("Running Compare task...")
