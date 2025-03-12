@@ -1,10 +1,8 @@
 import pandas as pd
 import os,re,sys
-import yaml
 from tqdm import tqdm
 import sqlite3
-import tempfile
-import shutil
+import streamlit as st
 
 
 from concurrent.futures import ProcessPoolExecutor, as_completed
@@ -18,6 +16,18 @@ def is_unique_peptide(peptide, pep_map):
         return True
     else:
         return False
+
+@st.cache_resource
+def load_pep_map(sqlite_path):
+    """Load peptide-protein mapping from SQLite and cache it in Streamlit."""
+    conn = sqlite3.connect(sqlite_path)
+    cursor = conn.cursor()
+    cursor.execute("SELECT peptide, protein FROM peptides")
+    rows = cursor.fetchall()
+    cursor.close()
+    conn.close()
+    return {peptide: protein.split(";") for peptide, protein in rows}
+
 
 # calculate Missed Cleavage Rate (MCR) for single table (sample)
 def check_missed_cleavages(sequence, target_AAs = "KR", pos=1, omit_AAs = "P"):
@@ -169,7 +179,8 @@ def calc_quant_for_fragment_pep(df_mc, pep_map, pep_quant_map, sample):
         row['Missed.Cleavage.Ratio'] = mcr * 100
         
         rows.append(row)
-    df_mc2 = pd.DataFrame(rows)
+    df_mc2 = pd.concat([pd.DataFrame([row]) for row in tqdm(df_mc.iterrows())], ignore_index=True)
+
     return df_mc2
 
 
@@ -177,26 +188,9 @@ def qc_one_trypsinp(path, output_dir,sqlite_path, enz):
     
     # Connect to the SQLite database
     print(f"Fetch the protein information for each peptide from {sqlite_path}")
-    conn = sqlite3.connect(sqlite_path)
-    cursor = conn.cursor()
-    
-    # peptide_list = list(df_nodup['PEP.StrippedSequence'])
-    # placeholders = ','.join('?' for _ in peptide_list)
-    # query = f"SELECT peptide, protein FROM peptides WHERE peptide IN ({placeholders})"
-    
-    # Execute the query with the peptide list as parameters
-    # cursor.execute(query, peptide_list)
-    
-    cursor.execute("SELECT peptide, protein FROM peptides")
-
-    rows = cursor.fetchall()
-
-    # Convert the results into a dictionary (if each peptide is unique)
-    pep_map = {peptide: protein.split(";") for peptide, protein in tqdm(rows)}
-
-    # Close the connection
-    conn.close()
-    
+    # Use cached peptide-protein mapping instead of querying every time
+    pep_map = load_pep_map(sqlite_path)
+ 
     
     df = pd.read_csv(path,sep="\t")
     sample = df.columns[-1]
@@ -306,7 +300,8 @@ def qc_one_trypsinp(path, output_dir,sqlite_path, enz):
         sites = ";".join([f'{pos},{aa}' for pos,aa in sites])
         row['Missed.Cleavages.Sites'] = sites
         rows.append(row)
-    df_mc2 = pd.DataFrame(rows)
+    df_mc2 = pd.concat([pd.DataFrame([row]) for row in tqdm(df_mc.iterrows())], ignore_index=True)
+
     
     df_mc2.to_csv(out_mc2_path,sep="\t",index=False)
     
@@ -347,25 +342,9 @@ def qc_one(path, output_dir,sqlite_path, enz):
     
     # Connect to the SQLite database
     print(f"Fetch the protein information for each peptide from {sqlite_path}")
-    conn = sqlite3.connect(sqlite_path)
-    cursor = conn.cursor()
-    
-    # peptide_list = list(df_nodup['PEP.StrippedSequence'])
-    # placeholders = ','.join('?' for _ in peptide_list)
-    # query = f"SELECT peptide, protein FROM peptides WHERE peptide IN ({placeholders})"
-    
-    # Execute the query with the peptide list as parameters
-    # cursor.execute(query, peptide_list)
-    
-    cursor.execute("SELECT peptide, protein FROM peptides")
+    # Use cached peptide-protein mapping instead of querying every time
+    pep_map = load_pep_map(sqlite_path)
 
-    rows = cursor.fetchall()
-
-    # Convert the results into a dictionary (if each peptide is unique)
-    pep_map = {peptide: protein.split(";") for peptide, protein in tqdm(rows)}
-
-    # Close the connection
-    conn.close()
     
     
     df = pd.read_csv(path,sep="\t")

@@ -129,7 +129,7 @@ def main():
     if uploaded_input_file:
         input_file_path = save_uploaded_file(uploaded_input_file)
         param["input_file"] = input_file_path
-        st.success(f"✔ Input file uploaded")
+        st.success(f"✅ Input file uploaded")
 
     # ✅ User uploads FASTA file (also saved to disk)
     uploaded_fasta = st.file_uploader("Upload FASTA File", type=["fasta", "fa"])
