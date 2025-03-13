@@ -3,6 +3,7 @@ import os,re,sys
 import yaml
 from tqdm import tqdm
 import sqlite3
+import gc
 
 
 from concurrent.futures import ProcessPoolExecutor, as_completed
@@ -307,6 +308,8 @@ def qc_one_trypsinp(path, output_dir,sqlite_path, enz):
     df_mc2 = pd.DataFrame(rows)
     
     df_mc2.to_csv(out_mc2_path,sep="\t",index=False)
+    del df_mc2
+    gc.collect()
     
     
     print(f"Results have been written to {out_mc2_path}")
@@ -338,6 +341,8 @@ def qc_one_trypsinp(path, output_dir,sqlite_path, enz):
 
     
     rdf.to_csv(output_path,sep="\t",index=False)
+    del rdf
+    gc.collect()
 
     print(f"Results have been written to {output_path}")
     
@@ -442,6 +447,8 @@ def qc_one(path, output_dir,sqlite_path, enz):
     
     out_mc2_path = os.path.join(output_dir,base_name + "_mc2.tsv")
     df_mc2.to_csv(out_mc2_path,sep="\t",index=False)
+    del df_mc2
+    gc.collect()
     print(f"Results have been written to {out_mc2_path}")
     
     results = {
@@ -466,6 +473,8 @@ def qc_one(path, output_dir,sqlite_path, enz):
 
     rdf = pd.DataFrame([results])
     rdf.to_csv(output_path,sep="\t",index=False)
+    del rdf
+    gc.collect()
 
     print(f"Results have been written to {output_path}")
 
