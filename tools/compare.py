@@ -37,8 +37,6 @@ def merge_qc(param):
     # ✅ Save merged QC file
     merged_qc_path = os.path.join(step3_dir, "merged_qc.tsv")
     merged_df.to_csv(merged_qc_path, sep="\t", index=False)
-    del merged_df
-    gc.collect()
 
     print(f"✅ Merged QC saved to {merged_qc_path}")
         
@@ -161,8 +159,6 @@ def compare_all(param):
     
     rdf.to_csv(os.path.join(step3_dir, "new_rdf.csv"), index=False)
     rdf2.to_csv(os.path.join(step3_dir, "new_rdf2.csv"), index=False)
-    del rdf, rdf2
-    gc.collect()
     
     d = dict()
     for index,row in tqdm(rdf.iterrows()):
@@ -192,8 +188,6 @@ def compare_all(param):
     xdf = pd.DataFrame(rows,columns=["Sample", "PRE_AA"] + aa_list)
     
     xdf.to_csv(os.path.join(step3_dir, "mc_aa_count.csv"), index=False)
-    del xdf
-    gc.collect()
     g3 = sns.clustermap(xdf.set_index(["Sample","PRE_AA"]), cmap="vlag", center=0, figsize=(20, 8), row_cluster=False, col_cluster=False)
     clustermap3_path = os.path.join(step3_dir, "heatmap_mc_aa_count.png")
     g3.savefig(clustermap3_path)
