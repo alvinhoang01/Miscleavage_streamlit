@@ -49,8 +49,7 @@ def display_sidebar_and_pages():
 # --- Main Function ---
 def main():
     st.set_page_config(
-        page_title="Missed Cleavage Parser",
-        #page_icon="🧬",
+        page_title="Miscleavage Parser",
         layout="wide",
         initial_sidebar_state="collapsed",
     )
