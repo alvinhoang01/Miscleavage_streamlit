@@ -29,7 +29,7 @@ def compare_task(param):
     compare_all(param)
     merge_qc(param)
 
-# ✅ Always ensure `temp_dir` is initialized at the start
+# ✅ Ensure `temp_dir` is always initialized before any function accesses it
 def get_or_create_temp_dir():
     """Ensure temp directory exists in session state, create if missing."""
     if "temp_dir" not in st.session_state:
@@ -39,7 +39,7 @@ def get_or_create_temp_dir():
     return st.session_state["temp_dir"]
 
 # ✅ Initialize temp directory at script start
-temp_dir = get_or_create_temp_dir()
+get_or_create_temp_dir()
 
 # ✅ Initialize session state for tracking files
 if "uploaded_files" not in st.session_state:
