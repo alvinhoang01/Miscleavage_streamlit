@@ -29,21 +29,14 @@ def compare_task(param):
     compare_all(param)
     merge_qc(param)
 
-# ✅ Ensure `temp_dir` is always initialized before any function accesses it
-def get_or_create_temp_dir():
-    """Ensure temp directory exists in session state, create if missing."""
-    if "temp_dir" not in st.session_state:
-        st.session_state["temp_dir"] = tempfile.mkdtemp()
-    elif not os.path.exists(st.session_state["temp_dir"]):
-        st.session_state["temp_dir"] = tempfile.mkdtemp()
-    return st.session_state["temp_dir"]
-
-# ✅ Initialize temp directory at script start
-get_or_create_temp_dir()
-
 # ✅ Initialize session state for tracking files
 if "uploaded_files" not in st.session_state:
     st.session_state.uploaded_files = []
+# ✅ Ensure `temp_dir` is initialized immediately on page load
+if "temp_dir" not in st.session_state:
+    st.session_state["temp_dir"] = tempfile.mkdtemp()
+elif not os.path.exists(st.session_state["temp_dir"]):
+    st.session_state["temp_dir"] = tempfile.mkdtemp()
 
 
 # ✅ Function to read YAML parameter file
@@ -66,12 +59,15 @@ def provide_yaml_download():
 # ✅ Function to save uploaded files to disk
 def save_uploaded_file(uploaded_file):
     """Stream uploaded file directly to disk to prevent memory issues."""
-    temp_dir = st.session_state.temp_dir
+    if "temp_dir" not in st.session_state:  # ✅ Extra safety check in case of page reset
+        st.session_state["temp_dir"] = tempfile.mkdtemp()
+
+    temp_dir = st.session_state["temp_dir"]
     file_path = os.path.join(temp_dir, uploaded_file.name)
-    
+
     with open(file_path, "wb") as f:
         shutil.copyfileobj(uploaded_file, f)  # Stream file to disk
-    
+
     return file_path
 
 # ✅ Function to run the full pipeline
@@ -166,8 +162,9 @@ def main():
                 )
             
             # ✅ Clean up the temp folder safely and reinitialize it
-            shutil.rmtree(st.session_state["temp_dir"], ignore_errors=True)
-            os.makedirs(st.session_state["temp_dir"], exist_ok=True)  
+            if "temp_dir" in st.session_state and os.path.exists(st.session_state["temp_dir"]):
+                shutil.rmtree(st.session_state["temp_dir"], ignore_errors=True)
+                st.session_state["temp_dir"] = tempfile.mkdtemp()  
 
 
 
