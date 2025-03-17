@@ -33,7 +33,10 @@ def compare_task(param):
 if "uploaded_files" not in st.session_state:
     st.session_state.uploaded_files = []
 # ✅ Ensure temp_dir is always initialized at the start of the session
-if "temp_dir" not in st.session_state or not os.path.exists(st.session_state["temp_dir"]):
+if "temp_dir" not in st.session_state:
+    st.session_state["temp_dir"] = tempfile.mkdtemp()
+elif not os.path.exists(st.session_state["temp_dir"]):
+    # If the folder was deleted but the session state variable exists, recreate it
     st.session_state["temp_dir"] = tempfile.mkdtemp()
 
 
@@ -157,8 +160,9 @@ def main():
                 )
             
             # ✅ Clean up the temp folder safely and reinitialize it
-            shutil.rmtree(st.session_state.temp_dir, ignore_errors=True)
-            st.session_state["temp_dir"] = tempfile.mkdtemp()  # Reinitialize temp directory
+            shutil.rmtree(st.session_state["temp_dir"], ignore_errors=True)
+            os.makedirs(st.session_state["temp_dir"], exist_ok=True)  # Recreate folder instead of deleting session state
+
 
 
 
