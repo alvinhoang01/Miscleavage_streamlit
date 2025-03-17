@@ -32,8 +32,10 @@ def compare_task(param):
 # ✅ Initialize session state for tracking files
 if "uploaded_files" not in st.session_state:
     st.session_state.uploaded_files = []
-if "temp_dir" not in st.session_state:
-    st.session_state.temp_dir = tempfile.mkdtemp()
+# ✅ Ensure temp_dir is always initialized at the start of the session
+if "temp_dir" not in st.session_state or not os.path.exists(st.session_state["temp_dir"]):
+    st.session_state["temp_dir"] = tempfile.mkdtemp()
+
 
 # ✅ Function to read YAML parameter file
 def load_yaml(uploaded_file):
@@ -154,9 +156,10 @@ def main():
                     mime="application/zip"
                 )
             
-            # ✅ Automatically delete temp folder after download button is displayed
+            # ✅ Clean up the temp folder safely and reinitialize it
             shutil.rmtree(st.session_state.temp_dir, ignore_errors=True)
-            del st.session_state["temp_dir"]  # Remove from session state to avoid referencing a deleted folder
+            st.session_state["temp_dir"] = tempfile.mkdtemp()  # Reinitialize temp directory
+
 
 
 if __name__ == "__main__":
