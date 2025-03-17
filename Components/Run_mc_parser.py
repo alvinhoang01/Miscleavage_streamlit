@@ -124,14 +124,14 @@ def main():
     st.write("### Parameters Preview:")
     st.json(param)
 
-    # ✅ User uploads input file (processed in chunks)
+    # ✅ User uploads input file
     uploaded_input_file = st.file_uploader("Upload Input File", type=["tsv", "csv", "txt"])
     if uploaded_input_file:
         input_file_path = save_uploaded_file(uploaded_input_file)
         param["input_file"] = input_file_path
         st.success(f"✅ Input file uploaded")
 
-    # ✅ User uploads FASTA file (also saved to disk)
+    # ✅ User uploads FASTA file
     uploaded_fasta = st.file_uploader("Upload FASTA File", type=["fasta", "fa"])
     if uploaded_fasta:
         fasta_path = save_uploaded_file(uploaded_fasta)
@@ -153,6 +153,11 @@ def main():
                     file_name="MC_parser_output.zip",
                     mime="application/zip"
                 )
+            
+            # ✅ Automatically delete temp folder after download button is displayed
+            shutil.rmtree(st.session_state.temp_dir, ignore_errors=True)
+            del st.session_state["temp_dir"]  # Remove from session state to avoid referencing a deleted folder
+
 
 if __name__ == "__main__":
     main()
