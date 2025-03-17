@@ -27,7 +27,7 @@ def main():
         unsafe_allow_html=True,
     )
 
-    st.markdown("<div class='title'>Missed Cleavage Parser</div>", unsafe_allow_html=True)
+    st.markdown("<div class='title'>Miscleavage Parser</div>", unsafe_allow_html=True)
     st.write("\n")
 
     # Display a static image (Optional)
