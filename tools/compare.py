@@ -104,8 +104,6 @@ def compare_all(param):
     rdf2.to_csv(os.path.join(step3_dir, "rdf2.csv"), index=False)
     wide_df.to_csv(os.path.join(step3_dir, "wide_df.csv"), index=False)
     wdf.to_csv(os.path.join(step3_dir, "wdf.csv"))
-    del wdf, wide_df
-    gc.collect()
 
     
     g = sns.clustermap(wdf, cmap="vlag", center=0, figsize=(20, 8))
