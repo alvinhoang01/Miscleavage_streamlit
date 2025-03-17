@@ -35,9 +35,10 @@ if "uploaded_files" not in st.session_state:
 # ✅ Ensure temp_dir is always initialized at the start of the session
 if "temp_dir" not in st.session_state:
     st.session_state["temp_dir"] = tempfile.mkdtemp()
-elif not os.path.exists(st.session_state["temp_dir"]):
+else:
+    if not os.path.exists(st.session_state["temp_dir"]):
     # If the folder was deleted but the session state variable exists, recreate it
-    st.session_state["temp_dir"] = tempfile.mkdtemp()
+        st.session_state["temp_dir"] = tempfile.mkdtemp()
 
 
 # ✅ Function to read YAML parameter file
@@ -161,7 +162,7 @@ def main():
             
             # ✅ Clean up the temp folder safely and reinitialize it
             shutil.rmtree(st.session_state["temp_dir"], ignore_errors=True)
-            os.makedirs(st.session_state["temp_dir"], exist_ok=True)  # Recreate folder instead of deleting session state
+            os.makedirs(st.session_state["temp_dir"], exist_ok=True)  
 
 
 
