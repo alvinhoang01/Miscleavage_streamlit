@@ -139,9 +139,9 @@ def main():
         st.success(f"✅ FASTA file uploaded")
 
     # ✅ Task Execution Section
-    st.write("## Run Tasks")
+    st.write("## Calculate Miscleavage Rate")
 
-    if st.button("🔄 Run Full Pipeline"):
+    if st.button("Run Misclevage Parser"):
         zip_output_path = run_full_pipeline(param)
 
         # ✅ Provide download button for results
@@ -150,10 +150,9 @@ def main():
                 st.download_button(
                     label="📥 Download Full Pipeline Results",
                     data=file,
-                    file_name="pipeline_results.zip",
+                    file_name="MC_parser_output.zip",
                     mime="application/zip"
                 )
-            st.success("📂 Results are ready for download!")
 
 if __name__ == "__main__":
     main()
