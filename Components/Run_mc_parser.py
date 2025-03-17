@@ -29,16 +29,21 @@ def compare_task(param):
     compare_all(param)
     merge_qc(param)
 
+# ✅ Always ensure `temp_dir` is initialized at the start
+def get_or_create_temp_dir():
+    """Ensure temp directory exists in session state, create if missing."""
+    if "temp_dir" not in st.session_state:
+        st.session_state["temp_dir"] = tempfile.mkdtemp()
+    elif not os.path.exists(st.session_state["temp_dir"]):
+        st.session_state["temp_dir"] = tempfile.mkdtemp()
+    return st.session_state["temp_dir"]
+
+# ✅ Initialize temp directory at script start
+temp_dir = get_or_create_temp_dir()
+
 # ✅ Initialize session state for tracking files
 if "uploaded_files" not in st.session_state:
     st.session_state.uploaded_files = []
-# ✅ Ensure temp_dir is always initialized at the start of the session
-if "temp_dir" not in st.session_state:
-    st.session_state["temp_dir"] = tempfile.mkdtemp()
-else:
-    if not os.path.exists(st.session_state["temp_dir"]):
-    # If the folder was deleted but the session state variable exists, recreate it
-        st.session_state["temp_dir"] = tempfile.mkdtemp()
 
 
 # ✅ Function to read YAML parameter file
