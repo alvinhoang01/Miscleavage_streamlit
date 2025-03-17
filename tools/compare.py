@@ -37,6 +37,8 @@ def merge_qc(param):
     # ✅ Save merged QC file
     merged_qc_path = os.path.join(step3_dir, "merged_qc.tsv")
     merged_df.to_csv(merged_qc_path, sep="\t", index=False)
+    del merged_df
+    gc.collect
 
     print(f"✅ Merged QC saved to {merged_qc_path}")
         
@@ -191,4 +193,6 @@ def compare_all(param):
     g3 = sns.clustermap(xdf.set_index(["Sample","PRE_AA"]), cmap="vlag", center=0, figsize=(20, 8), row_cluster=False, col_cluster=False)
     clustermap3_path = os.path.join(step3_dir, "heatmap_mc_aa_count.png")
     g3.savefig(clustermap3_path)
+    del rdf, rdf2, wdf, wide_df, xdf, g, g2, g3
+    gc.collect
     plt.close() 
